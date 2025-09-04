@@ -89,6 +89,10 @@ const translations = {
         add_more_images: "📷 Ko'proq rasmlar qo'shish",
         no_more_images: "✅ Boshqa rasmlar qo'shilmadi. Buyurtma yaratish uchun 'tugatish' tugmasini bosing",
         caption_skipped: "✅ Sarlavha o'tkazib yuborildi. Yangi rasm yuboring yoki 'tugatish' tugmasini bosing",
+        skip: "⏭️ O'tkazib yuborish",
+        skip_caption: "⏭️ Sarlavhasiz qoldirish",
+        no_images: "📭 Rasmlarsiz davom etish",
+        send_images_or_skip: "📷 Rasmlarni yuboring yoki ⏭️ o'tkazib yuboring",
     },
     russian: {
         welcome: "Добро пожаловать в Zarinka Bot! 👋\nИспользуйте /register чтобы начать.",
@@ -161,6 +165,10 @@ const translations = {
         add_more_images: "📷 Добавить еще изображения",
         no_more_images: "✅ Больше изображений не добавлено. Нажмите 'завершить' чтобы создать заказ",
         caption_skipped: "✅ Подпись пропущена. Отправьте новое изображение или нажмите 'завершить'",
+        skip: "⏭️ Пропустить",
+        skip_caption: "⏭️ Без подписи",
+        no_images: "📭 Продолжить без изображений",
+        send_images_or_skip: "📷 Отправьте изображения или ⏭️ пропустите",
     }
 };
 
@@ -881,16 +889,20 @@ function setupBotHandlers() {
                         break;
 
                     case 6: // Special instructions (after date selection)
-                        orderSession.data.specialInstructions = text === 'skip' ? '' : text;
+                        if (text === 'skip') {
+                            orderSession.data.specialInstructions = '';
+                        } else {
+                            orderSession.data.specialInstructions = text;
+                        }
                         orderSession.step = 7; // Move to image upload step
 
                         // Initialize images array
                         orderSession.data.images = [];
 
                         await ctx.reply(
-                            t.send_images_prompt,
+                            t.send_images_or_skip,
                             Markup.inlineKeyboard([
-                                [Markup.button.callback(t.skip_images, 'skip_images')],
+                                [Markup.button.callback(t.skip, 'skip_images')],
                                 [Markup.button.callback(t.finish_order, 'finish_order')]
                             ])
                         );
@@ -941,7 +953,7 @@ function setupBotHandlers() {
         }
     });
 
-    // Add image handler for order images - MAKE SURE THIS IS AFTER THE TEXT HANDLER
+    // Add image handler for order images
     bot.on(['photo', 'document'], async (ctx) => {
         try {
             console.log("Media received:", ctx.updateType);
@@ -960,50 +972,18 @@ function setupBotHandlers() {
             if (ctx.message.photo) {
                 // Handle photos
                 console.log("Photo received");
-                const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest quality
+                const photo = ctx.message.photo[ctx.message.photo.length - 1];
                 fileId = photo.file_id;
                 filename = `photo_${Date.now()}.jpg`;
-            } else if (ctx.message.document) {
-                // Handle documents
-                console.log("Document received");
+            } else if (ctx.message.document && ctx.message.document.mime_type?.startsWith('image/')) {
+                // Handle image documents only
+                console.log("Image document received");
                 fileId = ctx.message.document.file_id;
-                filename = ctx.message.document.file_name || `document_${Date.now()}`;
-
-                // Check if it's an image document
-                const mimeType = ctx.message.document.mime_type || '';
-                if (!mimeType.startsWith('image/')) {
-                    await ctx.reply("❌ Faqat rasm fayllari qabul qilinadi. Iltimos, rasm yuboring.");
-                    return;
-                }
+                filename = ctx.message.document.file_name || `image_${Date.now()}`;
             } else {
-                console.log("Unknown media type");
+                // Not an image, ignore
+                console.log("Non-image document received, ignoring");
                 return;
-            }
-
-            try {
-                // Download the file
-                const fileLink = await ctx.telegram.getFileLink(fileId);
-                const response = await axios({
-                    method: 'GET',
-                    url: fileLink,
-                    responseType: 'stream'
-                });
-
-                // Save file locally
-                const filePath = path.join(imagesDir, filename);
-                const writer = fs.createWriteStream(filePath);
-                response.data.pipe(writer);
-
-                // Wait for download to complete
-                await new Promise((resolve, reject) => {
-                    writer.on('finish', resolve);
-                    writer.on('error', reject);
-                });
-
-                console.log("File saved successfully:", filename);
-            } catch (downloadError) {
-                console.error("File download error:", downloadError.message);
-                // Continue even if download fails - we still have the fileId
             }
 
             // Initialize images array if it doesn't exist
@@ -1021,17 +1001,22 @@ function setupBotHandlers() {
             // Store the last image ID for caption handling
             orderSession.data.lastImageId = fileId;
 
-            await ctx.reply(t.image_received + "\n\n" + t.add_caption_prompt);
+            await ctx.reply(
+                t.image_received,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback(t.skip_caption, 'skip_caption')],
+                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                ])
+            );
 
         } catch (err) {
             console.error("❌ Image handling error:", err.message);
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
-            await ctx.reply(t.image_error);
+            await ctx.reply(t.something_wrong);
         }
     });
 
-    // Add the action handlers for image-related buttons
     bot.action('skip_images', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
@@ -1040,29 +1025,20 @@ function setupBotHandlers() {
                 return;
             }
 
-            // Create the order without images
-            const order = new Order({
-                customerName: session.data.customerName,
-                productName: session.data.productName,
-                quantity: session.data.quantity,
-                assignedBaker: session.data.assignedBaker,
-                deliveryDate: session.data.deliveryDate,
-                specialInstructions: session.data.specialInstructions,
-                images: [],
-                status: 'pending',
-                createdBy: ctx.from.id
-            });
-
-            await order.save();
-
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
-            await ctx.editMessageText(t.order_created);
+            await ctx.editMessageText(
+                t.no_images,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                ])
+            );
+
+            // Don't create order yet, just acknowledge the skip
             await ctx.answerCbQuery();
-            delete sessions[ctx.from.id];
         } catch (err) {
-            console.error("❌ Order creation error:", err.message);
+            console.error("❌ Skip images error:", err.message);
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
             await ctx.answerCbQuery(t.something_wrong);
@@ -1131,25 +1107,35 @@ function setupBotHandlers() {
         }
     });
 
-    // Add a command to handle /skip for captions
-    bot.hears('/skip', async (ctx) => {
+    // Skip caption button handler
+    bot.action('skip_caption', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session || session.step !== 7 || !session.data.lastImageId) {
+            if (!session || session.step !== 7) {
+                await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
 
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
+            // Clear the last image ID
             delete session.data.lastImageId;
 
-            await ctx.reply(t.caption_skipped, Markup.inlineKeyboard([
-                [Markup.button.callback(t.add_more_images, 'add_more_images')],
-                [Markup.button.callback(t.finish_order, 'finish_order')]
-            ]));
+            await ctx.editMessageText(
+                t.caption_skipped,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback(t.add_more_images, 'add_more_images')],
+                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                ])
+            );
+
+            await ctx.answerCbQuery();
         } catch (err) {
             console.error("❌ Skip caption error:", err.message);
+            const lang = getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            await ctx.answerCbQuery(t.something_wrong);
         }
     });
 
@@ -1273,15 +1259,28 @@ function setupBotHandlers() {
         await ctx.answerCbQuery(); // Just acknowledge the click, do nothing
     });
 
-    // Add global error handler
+    // Global error handler
     bot.catch((err, ctx) => {
         console.error(`❌ Global error for ${ctx.updateType}:`, err);
+
         try {
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
-            ctx.reply(t.something_wrong);
+
+            // Try to send a helpful error message
+            ctx.reply(t.something_wrong).catch(e => {
+                console.error("Could not send error message:", e);
+            });
+
+            // If it's a session error, clear the session
+            if (err.message.includes('session') || err.message.includes('step')) {
+                delete sessions[ctx.from.id];
+                ctx.reply("🔄 Iltimos, yangidan boshlang / Please start again").catch(e => {
+                    console.error("Could not send restart message:", e);
+                });
+            }
         } catch (e) {
-            console.error("❌ Could not send error message:", e);
+            console.error("Error in global error handler:", e);
         }
     });
 }
