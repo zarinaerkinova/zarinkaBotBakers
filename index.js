@@ -5,6 +5,7 @@ const User = require("./models/User");
 const Order = require("./models/Order");
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 const { format, addMonths, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth } = require('date-fns');
 
@@ -78,6 +79,16 @@ const translations = {
         add_caption_prompt: "💬 Iltimos, ushbu rasm uchun sarlavha qo'shing (yoki sarlavhasiz o'tkazib yuborish uchun /skip yuboring)",
         caption_added: "✅ Rasmga sarlavha qo'shildi!",
         add_more_images: "📷 Ko'proq rasmlar qo'shish",
+        send_images_prompt: "📷 Buyurtma uchun rasmlarni yuboring (yoki 'o'tkazib yuborish' tugmasini bosing)",
+        skip_images: "📷 Rasmlarni o'tkazib yuborish",
+        image_received: "✅ Rasm qabul qilindi. Sarlavha qo'shishingiz mumkin yoki yangi rasm yuboring",
+        image_error: "❌ Rasmni qayta ishlashda xatolik",
+        finish_order: "✅ Buyurtmani tugatish",
+        add_caption_prompt: "💬 Iltimos, ushbu rasm uchun sarlavha qo'shing (yoki /skip yuboring)",
+        caption_added: "✅ Rasmga sarlavha qo'shildi!",
+        add_more_images: "📷 Ko'proq rasmlar qo'shish",
+        no_more_images: "✅ Boshqa rasmlar qo'shilmadi. Buyurtma yaratish uchun 'tugatish' tugmasini bosing",
+        caption_skipped: "✅ Sarlavha o'tkazib yuborildi. Yangi rasm yuboring yoki 'tugatish' tugmasini bosing",
     },
     russian: {
         welcome: "Добро пожаловать в Zarinka Bot! 👋\nИспользуйте /register чтобы начать.",
@@ -140,6 +151,16 @@ const translations = {
         add_caption_prompt: "💬 Пожалуйста, добавьте подпись к этому изображению (или отправьте /skip чтобы пропустить)",
         caption_added: "✅ Подпись добавлена к изображению!",
         add_more_images: "📷 Добавить еще изображения",
+        send_images_prompt: "📷 Отправьте изображения для заказа (или нажмите 'пропустить')",
+        skip_images: "📷 Пропустить изображения",
+        image_received: "✅ Изображение получено. Вы можете добавить подпись или отправить новое изображение",
+        image_error: "❌ Ошибка обработки изображения",
+        finish_order: "✅ Завершить заказ",
+        add_caption_prompt: "💬 Пожалуйста, добавьте подпись к этому изображению (или отправьте /skip)",
+        caption_added: "✅ Подпись добавлена к изображению!",
+        add_more_images: "📷 Добавить еще изображения",
+        no_more_images: "✅ Больше изображений не добавлено. Нажмите 'завершить' чтобы создать заказ",
+        caption_skipped: "✅ Подпись пропущена. Отправьте новое изображение или нажмите 'завершить'",
     }
 };
 
@@ -760,6 +781,7 @@ function setupBotHandlers() {
     });
 
     // Handle first/last name and order creation
+    // Handle first/last name and order creation
     bot.on("text", async (ctx) => {
         console.log("Text received:", ctx.message.text);
 
@@ -862,8 +884,11 @@ function setupBotHandlers() {
                         orderSession.data.specialInstructions = text === 'skip' ? '' : text;
                         orderSession.step = 7; // Move to image upload step
 
+                        // Initialize images array
+                        orderSession.data.images = [];
+
                         await ctx.reply(
-                            `${t.send_images_prompt}`,
+                            t.send_images_prompt,
                             Markup.inlineKeyboard([
                                 [Markup.button.callback(t.skip_images, 'skip_images')],
                                 [Markup.button.callback(t.finish_order, 'finish_order')]
@@ -872,7 +897,20 @@ function setupBotHandlers() {
                         break;
 
                     case 7: // Image caption handling
-                        // If we're in step 7 and receiving text, it's a caption for the last image
+                        // If we're in step 7 and receiving text, it could be a caption or a command
+                        if (text === '/skip') {
+                            // Skip caption for the current image
+                            if (orderSession.data.lastImageId) {
+                                delete orderSession.data.lastImageId;
+                                await ctx.reply(t.caption_skipped, Markup.inlineKeyboard([
+                                    [Markup.button.callback(t.add_more_images, 'add_more_images')],
+                                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                                ]));
+                            }
+                            return;
+                        }
+
+                        // If we have a lastImageId, this text is a caption for that image
                         if (orderSession.data.lastImageId) {
                             // Find the image and add caption
                             const imageIndex = orderSession.data.images.findIndex(
@@ -903,11 +941,16 @@ function setupBotHandlers() {
         }
     });
 
-    // Add image handler for order images
+    // Add image handler for order images - MAKE SURE THIS IS AFTER THE TEXT HANDLER
     bot.on(['photo', 'document'], async (ctx) => {
         try {
+            console.log("Media received:", ctx.updateType);
+
             const orderSession = sessions[ctx.from.id];
-            if (!orderSession || orderSession.step !== 7) return;
+            if (!orderSession || orderSession.step !== 7) {
+                console.log("No active order session or wrong step");
+                return;
+            }
 
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
@@ -916,13 +959,51 @@ function setupBotHandlers() {
 
             if (ctx.message.photo) {
                 // Handle photos
+                console.log("Photo received");
                 const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest quality
                 fileId = photo.file_id;
                 filename = `photo_${Date.now()}.jpg`;
             } else if (ctx.message.document) {
-                // Handle documents (could be other image types)
+                // Handle documents
+                console.log("Document received");
                 fileId = ctx.message.document.file_id;
                 filename = ctx.message.document.file_name || `document_${Date.now()}`;
+
+                // Check if it's an image document
+                const mimeType = ctx.message.document.mime_type || '';
+                if (!mimeType.startsWith('image/')) {
+                    await ctx.reply("❌ Faqat rasm fayllari qabul qilinadi. Iltimos, rasm yuboring.");
+                    return;
+                }
+            } else {
+                console.log("Unknown media type");
+                return;
+            }
+
+            try {
+                // Download the file
+                const fileLink = await ctx.telegram.getFileLink(fileId);
+                const response = await axios({
+                    method: 'GET',
+                    url: fileLink,
+                    responseType: 'stream'
+                });
+
+                // Save file locally
+                const filePath = path.join(imagesDir, filename);
+                const writer = fs.createWriteStream(filePath);
+                response.data.pipe(writer);
+
+                // Wait for download to complete
+                await new Promise((resolve, reject) => {
+                    writer.on('finish', resolve);
+                    writer.on('error', reject);
+                });
+
+                console.log("File saved successfully:", filename);
+            } catch (downloadError) {
+                console.error("File download error:", downloadError.message);
+                // Continue even if download fails - we still have the fileId
             }
 
             // Initialize images array if it doesn't exist
@@ -950,7 +1031,7 @@ function setupBotHandlers() {
         }
     });
 
-    // Add action handlers for image-related buttons
+    // Add the action handlers for image-related buttons
     bot.action('skip_images', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
@@ -1047,6 +1128,28 @@ function setupBotHandlers() {
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
             await ctx.answerCbQuery(t.something_wrong);
+        }
+    });
+
+    // Add a command to handle /skip for captions
+    bot.hears('/skip', async (ctx) => {
+        try {
+            const session = sessions[ctx.from.id];
+            if (!session || session.step !== 7 || !session.data.lastImageId) {
+                return;
+            }
+
+            const lang = getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+
+            delete session.data.lastImageId;
+
+            await ctx.reply(t.caption_skipped, Markup.inlineKeyboard([
+                [Markup.button.callback(t.add_more_images, 'add_more_images')],
+                [Markup.button.callback(t.finish_order, 'finish_order')]
+            ]));
+        } catch (err) {
+            console.error("❌ Skip caption error:", err.message);
         }
     });
 
