@@ -84,7 +84,7 @@ const translations = {
         image_received: "✅ Rasm qabul qilindi. Sarlavha qo'shishingiz mumkin yoki yangi rasm yuboring",
         image_error: "❌ Rasmni qayta ishlashda xatolik",
         finish_order: "✅ Buyurtmani tugatish",
-        add_caption_prompt: "💬 Iltimos, ushbu rasm uchun sarlavha qo'shing (yoki /skip yuboring)",
+        add_caption_prompt: "💬 Iltimos, ushbu rasm uchun sarlavha qo'shishingizni so'raymiz (yoki /skip yuboring)",
         caption_added: "✅ Rasmga sarlavha qo'shildi!",
         add_more_images: "📷 Ko'proq rasmlar qo'shish",
         no_more_images: "✅ Boshqa rasmlar qo'shilmadi. Buyurtma yaratish uchun 'tugatish' tugmasini bosing",
@@ -468,18 +468,41 @@ function setupBotHandlers() {
             let orders;
             if (user.role === "admin") {
                 orders = await Order.find().populate('assignedBaker', 'firstName lastName');
+
+                // Добавьте этот блок:
+                let message = t.all_orders;
+                orders.forEach((order, index) => {
+                    const bakerName = order.assignedBaker
+                        ? `${order.assignedBaker.firstName} ${order.assignedBaker.lastName}`
+                        : lang === 'uzbek' ? "Topshirilmagan" : "Не назначено";
+
+                    message += `🆔 ${lang === 'uzbek' ? 'Buyurtma' : 'Заказ'} ${index + 1}\n`;
+                    message += `👤 ${lang === 'uzbek' ? 'Mijoz' : 'Клиент'}: ${order.customerName}\n`;
+                    message += `📦 ${lang === 'uzbek' ? 'Mahsulot' : 'Продукт'}: ${order.productName}\n`;
+                    message += `🔢 ${lang === 'uzbek' ? 'Miqdor' : 'Количество'}: ${order.quantity}\n`;
+                    message += `👨‍🍳 ${lang === 'uzbek' ? 'Qandolatchi' : 'Пекарь'}: ${bakerName}\n`;
+                    message += `${t.delivery}${order.deliveryDate}\n`;
+                    message += `${t.status}${order.status}\n`;
+
+                    // Add image count info
+                    if (order.images && order.images.length > 0) {
+                        message += `📸 ${lang === 'uzbek' ? 'Rasmlar' : 'Изображения'}: ${order.images.length}\n`;
+                    }
+
+                    if (order.specialInstructions) {
+                        message += `${t.instructions}${order.specialInstructions}\n`;
+                    }
+                    message += `────────────────────\n`;
+                });
+
+                ctx.reply(message);
+                return;
             } else if (user.role === "baker") {
                 orders = await Order.find({ assignedBaker: user._id }).populate('assignedBaker', 'firstName lastName');
-            } else {
-                return ctx.reply(t.not_registered);
-            }
+                if (!orders || orders.length === 0) {
+                    return ctx.reply(t.no_orders);
+                }
 
-            if (!orders || orders.length === 0) {
-                return ctx.reply(t.no_orders);
-            }
-
-            // For bakers, show orders with action buttons
-            if (user.role === "baker") {
                 const bakerOrders = orders.filter(order =>
                     order.assignedBaker && order.assignedBaker._id.equals(user._id)
                 );
@@ -516,32 +539,27 @@ function setupBotHandlers() {
                         ];
                     }
 
-                    await ctx.reply(message, Markup.inlineKeyboard(buttons));
+                    // Если есть изображения, отправляем их как media group с первым caption = message
+                    if (order.images && order.images.length > 0) {
+                        const media = order.images.map((img, idx) => ({
+                            type: 'photo',
+                            media: img.fileId,
+                            caption: idx === 0 ? message : (img.caption || '')
+                        }));
+
+                        await ctx.replyWithMediaGroup(media);
+
+                        // После media group можно отправить кнопки отдельным сообщением
+                        await ctx.reply(lang === 'uzbek' ? 'Buyurtma harakatlari:' : 'Действия по заказу', Markup.inlineKeyboard(buttons));
+                    } else {
+                        // Если нет изображений, просто текст + кнопки
+                        await ctx.reply(message, Markup.inlineKeyboard(buttons));
+                    }
                 }
                 return;
             }
 
-            // For admin, show all orders in a list
-            let message = t.all_orders;
-            orders.forEach((order, index) => {
-                const bakerName = order.assignedBaker
-                    ? `${order.assignedBaker.firstName} ${order.assignedBaker.lastName}`
-                    : lang === 'uzbek' ? "Topshirilmagan" : "Не назначено";
-
-                message += `🆔 ${lang === 'uzbek' ? 'Buyurtma' : 'Заказ'} ${index + 1}\n`;
-                message += `👤 ${lang === 'uzbek' ? 'Mijoz' : 'Клиент'}: ${order.customerName}\n`;
-                message += `📦 ${lang === 'uzbek' ? 'Mahsulot' : 'Продукт'}: ${order.productName}\n`;
-                message += `🔢 ${lang === 'uzbek' ? 'Miqdor' : 'Количество'}: ${order.quantity}\n`;
-                message += `👨‍🍳 ${lang === 'uzbek' ? 'Qandolatchi' : 'Пекарь'}: ${bakerName}\n`;
-                message += `${t.delivery}${order.deliveryDate}\n`;
-                message += `${t.status}${order.status}\n`;
-                if (order.specialInstructions) {
-                    message += `${t.instructions}${order.specialInstructions}\n`;
-                }
-                message += `────────────────────\n`;
-            });
-
-            ctx.reply(message);
+            // ... rest of admin order viewing code ...
         } catch (err) {
             console.error("❌ Orders command error:", err.message);
             const lang = getUserLanguage(ctx.from.id);
@@ -550,6 +568,43 @@ function setupBotHandlers() {
         }
     });
 
+    // Helper function to send order with images
+    async function sendOrderWithImages(ctx, order, message, buttons = null) {
+        const lang = getUserLanguage(ctx.from.id);
+        const t = translations[lang];
+
+        // Send the order message
+        if (buttons) {
+            await ctx.editMessageText(message, Markup.inlineKeyboard(buttons));
+        } else {
+            await ctx.editMessageText(message);
+        }
+
+        // Send images if they exist
+        if (order.images && order.images.length > 0) {
+            for (const image of order.images) {
+                try {
+                    await ctx.replyWithPhoto(image.fileId, {
+                        caption: image.caption || `${lang === 'uzbek' ? 'Buyurtma rasmi' : 'Изображение заказа'}`
+                    });
+                } catch (error) {
+                    try {
+                        await ctx.replyWithDocument(image.fileId, {
+                            caption: image.caption || `${lang === 'uzbek' ? 'Buyurtma fayli' : 'Файл заказа'}`
+                        });
+                    } catch (docError) {
+                        await ctx.reply(
+                            `📄 ${lang === 'uzbek' ? 'Fayl' : 'Файл'}: ${image.filename}\n` +
+                            (image.caption ? `📝 ${image.caption}\n` : '')
+                        );
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+        }
+    }
+
+    // Update all order action handlers to use the helper function
     bot.action(/accept_(.+)/, async (ctx) => {
         try {
             const lang = getUserLanguage(ctx.from.id);
@@ -583,15 +638,18 @@ function setupBotHandlers() {
             await order.save();
 
             await ctx.answerCbQuery(t.order_accepted);
-            await ctx.editMessageText(
-                ctx.update.callback_query.message.text + `\n✅ ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'QABUL QILINDI' : 'ПРИНЯТ'}`,
-                Markup.inlineKeyboard([
-                    [
-                        Markup.button.callback(t.in_progress, `progress_${order._id}`),
-                        Markup.button.callback(t.complete, `complete_${order._id}`)
-                    ]
-                ])
-            );
+
+            // Use helper function to show order with images
+            const message = ctx.update.callback_query.message.text + `\n✅ ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'QABUL QILINDI' : 'ПРИНЯТ'}`;
+            const buttons = [
+                [
+                    Markup.button.callback(t.in_progress, `progress_${order._id}`),
+                    Markup.button.callback(t.complete, `complete_${order._id}`)
+                ]
+            ];
+
+            await sendOrderWithImages(ctx, order, message, buttons);
+
         } catch (err) {
             console.error("❌ Accept order error:", err.message);
             const lang = getUserLanguage(ctx.from.id);
@@ -600,6 +658,7 @@ function setupBotHandlers() {
         }
     });
 
+    // Similarly update other action handlers (reject_, progress_, complete_)
     bot.action(/reject_(.+)/, async (ctx) => {
         try {
             const lang = getUserLanguage(ctx.from.id);
@@ -633,10 +692,11 @@ function setupBotHandlers() {
             await order.save();
 
             await ctx.answerCbQuery(t.order_rejected);
-            await ctx.editMessageText(
-                ctx.update.callback_query.message.text + `\n❌ ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'RAD ETILDI' : 'ОТКЛОНЕНО'}`,
-                Markup.inlineKeyboard([]) // Remove buttons
-            );
+
+            // Use helper function
+            const message = ctx.update.callback_query.message.text + `\n❌ ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'RAD ETILDI' : 'ОТКЛОНЕНО'}`;
+            await sendOrderWithImages(ctx, order, message);
+
         } catch (err) {
             console.error("❌ Reject order error:", err.message);
             const lang = getUserLanguage(ctx.from.id);
