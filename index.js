@@ -93,6 +93,10 @@ const translations = {
         skip_caption: "⏭️ Sarlavhasiz qoldirish",
         no_images: "📭 Rasmlarsiz davom etish",
         send_images_or_skip: "📷 Rasmlarni yuboring yoki ⏭️ o'tkazib yuboring",
+        send_images_first: "📷 Avval buyurtma uchun rasmlarni yuboring:",
+        notes_prompt: "💬 Maxsus ko'rsatmalarni kiriting:",
+        skip_notes: "⏭️ Ko'rsatmalarni o'tkazib yuborish",
+        no_notes: "📝 Ko'rsatmalarsiz davom etish",
     },
     russian: {
         welcome: "Добро пожаловать в Zarinka Bot! 👋\nИспользуйте /register чтобы начать.",
@@ -169,6 +173,10 @@ const translations = {
         skip_caption: "⏭️ Без подписи",
         no_images: "📭 Продолжить без изображений",
         send_images_or_skip: "📷 Отправьте изображения или ⏭️ пропустите",
+        send_images_first: "📷 Сначала отправьте изображения для заказа:",
+        notes_prompt: "💬 Введите особые инструкции:",
+        skip_notes: "⏭️ Пропустить инструкции",
+        no_notes: "📝 Продолжить без инструкций",
     }
 };
 
@@ -541,18 +549,18 @@ function setupBotHandlers() {
 
                     // Если есть изображения, отправляем их как media group с первым caption = message
                     if (order.images && order.images.length > 0) {
-                        const media = order.images.map((img, idx) => ({
-                            type: 'photo',
-                            media: img.fileId,
-                            caption: idx === 0 ? message : (img.caption || '')
-                        }));
+                        // Main photo with caption + buttons
+                        await ctx.replyWithPhoto(order.images[0].fileId, {
+                            caption: message,
+                            ...Markup.inlineKeyboard(buttons),
+                        });
 
-                        await ctx.replyWithMediaGroup(media);
-
-                        // После media group можно отправить кнопки отдельным сообщением
-                        await ctx.reply(lang === 'uzbek' ? 'Buyurtma harakatlari:' : 'Действия по заказу', Markup.inlineKeyboard(buttons));
+                        // Send remaining photos without captions
+                        for (let i = 1; i < order.images.length; i++) {
+                            await ctx.replyWithPhoto(order.images[i].fileId);
+                        }
                     } else {
-                        // Если нет изображений, просто текст + кнопки
+                        // No images → just text + buttons
                         await ctx.reply(message, Markup.inlineKeyboard(buttons));
                     }
                 }
@@ -849,7 +857,6 @@ function setupBotHandlers() {
     });
 
     // Handle first/last name and order creation
-    // Handle first/last name and order creation
     bot.on("text", async (ctx) => {
         console.log("Text received:", ctx.message.text);
 
@@ -948,19 +955,15 @@ function setupBotHandlers() {
                         );
                         break;
 
-                    case 6: // Special instructions (after date selection)
-                        if (text === 'skip') {
-                            orderSession.data.specialInstructions = '';
-                        } else {
-                            orderSession.data.specialInstructions = text;
-                        }
-                        orderSession.step = 7; // Move to image upload step
+                    case 5: // After date selection - go to IMAGES first
+                        orderSession.data.deliveryDate = text;
+                        orderSession.step = 6; // Images step
 
                         // Initialize images array
                         orderSession.data.images = [];
 
                         await ctx.reply(
-                            t.send_images_or_skip,
+                            t.send_images_first,
                             Markup.inlineKeyboard([
                                 [Markup.button.callback(t.skip, 'skip_images')],
                                 [Markup.button.callback(t.finish_order, 'finish_order')]
@@ -968,21 +971,31 @@ function setupBotHandlers() {
                         );
                         break;
 
-                    case 7: // Image caption handling
-                        // If we're in step 7 and receiving text, it could be a caption or a command
-                        if (text === '/skip') {
-                            // Skip caption for the current image
-                            if (orderSession.data.lastImageId) {
-                                delete orderSession.data.lastImageId;
-                                await ctx.reply(t.caption_skipped, Markup.inlineKeyboard([
-                                    [Markup.button.callback(t.add_more_images, 'add_more_images')],
-                                    [Markup.button.callback(t.finish_order, 'finish_order')]
-                                ]));
-                            }
-                            return;
-                        }
+                    case 7: // Notes step (after images)
+                        orderSession.data.specialInstructions = text;
+                        orderSession.step = 8; // Final confirmation
 
-                        // If we have a lastImageId, this text is a caption for that image
+                        // Create the order
+                        const order = new Order({
+                            customerName: orderSession.data.customerName,
+                            productName: orderSession.data.productName,
+                            quantity: orderSession.data.quantity,
+                            assignedBaker: orderSession.data.assignedBaker,
+                            deliveryDate: orderSession.data.deliveryDate,
+                            specialInstructions: orderSession.data.specialInstructions,
+                            images: orderSession.data.images || [],
+                            status: 'pending',
+                            createdBy: ctx.from.id
+                        });
+
+                        await order.save();
+
+                        await ctx.reply(t.order_created);
+                        delete sessions[ctx.from.id];
+                        break;
+
+                    case 6: // Image caption handling
+                        // If we're in step 6 and receiving text, it could be a caption
                         if (orderSession.data.lastImageId) {
                             // Find the image and add caption
                             const imageIndex = orderSession.data.images.findIndex(
@@ -995,6 +1008,7 @@ function setupBotHandlers() {
 
                                 await ctx.reply(t.caption_added, Markup.inlineKeyboard([
                                     [Markup.button.callback(t.add_more_images, 'add_more_images')],
+                                    [Markup.button.callback(t.skip_notes, 'skip_to_notes')],
                                     [Markup.button.callback(t.finish_order, 'finish_order')]
                                 ]));
                             }
@@ -1019,7 +1033,7 @@ function setupBotHandlers() {
             console.log("Media received:", ctx.updateType);
 
             const orderSession = sessions[ctx.from.id];
-            if (!orderSession || orderSession.step !== 7) {
+            if (!orderSession || orderSession.step !== 6) { // Changed to step 6 for images
                 console.log("No active order session or wrong step");
                 return;
             }
@@ -1065,6 +1079,7 @@ function setupBotHandlers() {
                 t.image_received,
                 Markup.inlineKeyboard([
                     [Markup.button.callback(t.skip_caption, 'skip_caption')],
+                    [Markup.button.callback(t.skip_notes, 'skip_to_notes')],
                     [Markup.button.callback(t.finish_order, 'finish_order')]
                 ])
             );
@@ -1077,7 +1092,40 @@ function setupBotHandlers() {
         }
     });
 
-    bot.action('skip_images', async (ctx) => {
+    // Skip to notes button handler
+    bot.action('skip_to_notes', async (ctx) => {
+        try {
+            const session = sessions[ctx.from.id];
+            if (!session || session.step !== 6) {
+                await ctx.answerCbQuery("⚠️ Session expired.");
+                return;
+            }
+
+            const lang = getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+
+            // Move to notes step
+            session.step = 7;
+
+            await ctx.editMessageText(
+                t.notes_prompt,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback(t.skip_notes, 'skip_notes')],
+                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                ])
+            );
+
+            await ctx.answerCbQuery();
+        } catch (err) {
+            console.error("❌ Skip to notes error:", err.message);
+            const lang = getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            await ctx.answerCbQuery(t.something_wrong);
+        }
+    });
+
+    // Skip notes button handler
+    bot.action('skip_notes', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
             if (!session || session.step !== 7) {
@@ -1088,14 +1136,55 @@ function setupBotHandlers() {
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
+            // Create the order without notes
+            const order = new Order({
+                customerName: session.data.customerName,
+                productName: session.data.productName,
+                quantity: session.data.quantity,
+                assignedBaker: session.data.assignedBaker,
+                deliveryDate: session.data.deliveryDate,
+                specialInstructions: '',
+                images: session.data.images || [],
+                status: 'pending',
+                createdBy: ctx.from.id
+            });
+
+            await order.save();
+
+            await ctx.editMessageText(t.order_created);
+            await ctx.answerCbQuery();
+            delete sessions[ctx.from.id];
+        } catch (err) {
+            console.error("❌ Skip notes error:", err.message);
+            const lang = getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            await ctx.answerCbQuery(t.something_wrong);
+        }
+    });
+
+    // Update the skip_images handler
+    bot.action('skip_images', async (ctx) => {
+        try {
+            const session = sessions[ctx.from.id];
+            if (!session || session.step !== 6) {
+                await ctx.answerCbQuery("⚠️ Session expired.");
+                return;
+            }
+
+            const lang = getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+
+            // Move directly to notes step
+            session.step = 7;
+
             await ctx.editMessageText(
-                t.no_images,
+                t.notes_prompt,
                 Markup.inlineKeyboard([
+                    [Markup.button.callback(t.skip_notes, 'skip_notes')],
                     [Markup.button.callback(t.finish_order, 'finish_order')]
                 ])
             );
 
-            // Don't create order yet, just acknowledge the skip
             await ctx.answerCbQuery();
         } catch (err) {
             console.error("❌ Skip images error:", err.message);
@@ -1105,22 +1194,26 @@ function setupBotHandlers() {
         }
     });
 
+    // Update the finish_order handler to handle both steps
     bot.action('finish_order', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session || session.step !== 7) {
+            if (!session) {
                 await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
 
-            // Create the order with images
+            const lang = getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+
+            // Create the order (handle both cases - with or without notes)
             const order = new Order({
                 customerName: session.data.customerName,
                 productName: session.data.productName,
                 quantity: session.data.quantity,
                 assignedBaker: session.data.assignedBaker,
                 deliveryDate: session.data.deliveryDate,
-                specialInstructions: session.data.specialInstructions,
+                specialInstructions: session.data.specialInstructions || '',
                 images: session.data.images || [],
                 status: 'pending',
                 createdBy: ctx.from.id
@@ -1128,71 +1221,11 @@ function setupBotHandlers() {
 
             await order.save();
 
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
             await ctx.editMessageText(t.order_created);
             await ctx.answerCbQuery();
             delete sessions[ctx.from.id];
         } catch (err) {
             console.error("❌ Order creation error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
-        }
-    });
-
-    bot.action('add_more_images', async (ctx) => {
-        try {
-            const session = sessions[ctx.from.id];
-            if (!session || session.step !== 7) {
-                await ctx.answerCbQuery("⚠️ Session expired.");
-                return;
-            }
-
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            await ctx.editMessageText(t.send_images_prompt, Markup.inlineKeyboard([
-                [Markup.button.callback(t.skip_images, 'skip_images')],
-                [Markup.button.callback(t.finish_order, 'finish_order')]
-            ]));
-
-            await ctx.answerCbQuery();
-        } catch (err) {
-            console.error("❌ Add more images error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
-        }
-    });
-
-    // Skip caption button handler
-    bot.action('skip_caption', async (ctx) => {
-        try {
-            const session = sessions[ctx.from.id];
-            if (!session || session.step !== 7) {
-                await ctx.answerCbQuery("⚠️ Session expired.");
-                return;
-            }
-
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            // Clear the last image ID
-            delete session.data.lastImageId;
-
-            await ctx.editMessageText(
-                t.caption_skipped,
-                Markup.inlineKeyboard([
-                    [Markup.button.callback(t.add_more_images, 'add_more_images')],
-                    [Markup.button.callback(t.finish_order, 'finish_order')]
-                ])
-            );
-
-            await ctx.answerCbQuery();
-        } catch (err) {
-            console.error("❌ Skip caption error:", err.message);
             const lang = getUserLanguage(ctx.from.id);
             const t = translations[lang];
             await ctx.answerCbQuery(t.something_wrong);
@@ -1260,11 +1293,19 @@ function setupBotHandlers() {
             }
 
             session.data.deliveryDate = format(selectedDate, 'yyyy-MM-dd');
-            session.step = 6;
+            session.step = 6; // Changed to step 6 for images
 
             await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Tanlandi' : 'Выбрано'}: ${format(selectedDate, 'MMM dd, yyyy')}`);
             await ctx.deleteMessage();
-            await ctx.reply(t.special_instructions);
+
+            // Go to images step instead of notes
+            await ctx.reply(
+                t.send_images_first,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback(t.skip, 'skip_images')],
+                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                ])
+            );
         } catch (err) {
             console.error("❌ Date selection error:", err.message);
             const lang = getUserLanguage(ctx.from.id);
