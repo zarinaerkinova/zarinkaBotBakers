@@ -5,7 +5,6 @@ const User = require("./models/User");
 const Order = require("./models/Order");
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 
 const { format, addMonths, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth } = require('date-fns');
 
@@ -76,27 +75,27 @@ const translations = {
         prev_month: '⬅️ Oldingi',
         today: 'Bugun',
         next_month: 'Keyingi ➡️',
-        add_caption_prompt: "💬 Iltimos, ushbu rasm uchun sarlavha qo'shing (yoki sarlavhasiz o'tkazib yuborish uchun /skip yuboring)",
-        caption_added: "✅ Rasmga sarlavha qo'shildi!",
-        add_more_images: "📷 Ko'proq rasmlar qo'shish",
-        send_images_prompt: "📷 Buyurtma uchun rasmlarni yuboring (yoki 'o'tkazib yuborish' tugmasini bosing)",
+        send_images_first: "📷 Avval buyurtma uchun rasmlarni yuboring:",
         skip_images: "📷 Rasmlarni o'tkazib yuborish",
-        image_received: "✅ Rasm qabul qilindi. Sarlavha qo'shishingiz mumkin yoki yangi rasm yuboring",
+        image_received: "✅ Rasm qabul qilindi.",
         image_error: "❌ Rasmni qayta ishlashda xatolik",
         finish_order: "✅ Buyurtmani tugatish",
-        add_caption_prompt: "💬 Iltimos, ushbu rasm uchun sarlavha qo'shishingizni so'raymiz (yoki /skip yuboring)",
-        caption_added: "✅ Rasmga sarlavha qo'shildi!",
-        add_more_images: "📷 Ko'proq rasmlar qo'shish",
-        no_more_images: "✅ Boshqa rasmlar qo'shilmadi. Buyurtma yaratish uchun 'tugatish' tugmasini bosing",
-        caption_skipped: "✅ Sarlavha o'tkazib yuborildi. Yangi rasm yuboring yoki 'tugatish' tugmasini bosing",
-        skip: "⏭️ O'tkazib yuborish",
-        skip_caption: "⏭️ Sarlavhasiz qoldirish",
-        no_images: "📭 Rasmlarsiz davom etish",
-        send_images_or_skip: "📷 Rasmlarni yuboring yoki ⏭️ o'tkazib yuboring",
-        send_images_first: "📷 Avval buyurtma uchun rasmlarni yuboring:",
         notes_prompt: "💬 Maxsus ko'rsatmalarni kiriting:",
         skip_notes: "⏭️ Ko'rsatmalarni o'tkazib yuborish",
         no_notes: "📝 Ko'rsatmalarsiz davom etish",
+        caption_added: "✅ Rasmga izoh qo'shildi",
+        caption_skipped: "⏭️ Rasmga izoh qo'shilmadi",
+        add_more_images: "➕ Boshqa rasm qo'shish",
+        send_images_or_skip: "📷 Rasmlarni yuboring yoki o'tkazib yuboring:",
+        delivery_option: "🚚 Yetkazib berish yoki olib ketishni tanlang:",
+        pickup: "🏠 Olib ketish",
+        delivery: "🚚 Yetkazib berish",
+        address_prompt: "📍 Yetkazib berish manzilini kiriting:",
+        price_prompt: "💰 Mahsulot narxini kiriting:",
+        cake_size_prompt: "🎂 Tort o'lchamini tanlang:",
+        size_12: "12 bo'lak",
+        size_8: "8 bo'lak",
+        choose_date_from_calendar: "📅 Iltimos, sanani kalendardan tanlang 👆"
     },
     russian: {
         welcome: "Добро пожаловать в Zarinka Bot! 👋\nИспользуйте /register чтобы начать.",
@@ -146,7 +145,7 @@ const translations = {
         not_assigned_to_you: "❌ Этот заказ не назначен вам.",
         order_already_status: "❌ Статус заказа уже ",
         must_be_accepted: "❌ Заказ должен быть сначала принят. Текущий статус: ",
-        must_be_in_progress: "❌ Заказ должен быть в процессе. Текущий статус: ",
+        must_be_in_progress: "❌ Заказ должен быть в процессе. Текульный статус: ",
         something_wrong: "⚠️ Что-то пошло не так. Пожалуйста, попробуйте еще раз.",
         registration_failed: "⚠️ Регистрация не удалась, пожалуйста, попробуйте еще раз.",
         logout_success: "🚪 Вы вышли из системы. Ваша учетная запись все еще зарегистрирована.",
@@ -156,78 +155,85 @@ const translations = {
         prev_month: '⬅️ Предыдущий',
         today: 'Сегодня',
         next_month: 'Следующий ➡️',
-        add_caption_prompt: "💬 Пожалуйста, добавьте подпись к этому изображению (или отправьте /skip чтобы пропустить)",
-        caption_added: "✅ Подпись добавлена к изображению!",
-        add_more_images: "📷 Добавить еще изображения",
-        send_images_prompt: "📷 Отправьте изображения для заказа (или нажмите 'пропустить')",
-        skip_images: "📷 Пропустить изображения",
-        image_received: "✅ Изображение получено. Вы можете добавить подпись или отправить новое изображение",
-        image_error: "❌ Ошибка обработки изображения",
+        send_images_first: "📷 Сначала отправьте фото для заказа:",
+        skip_images: "📷 Пропустить добавление фото",
+        image_received: "✅ Фото получено.",
+        image_error: "❌ Ошибка при обработке фото",
         finish_order: "✅ Завершить заказ",
-        add_caption_prompt: "💬 Пожалуйста, добавьте подпись к этому изображению (или отправьте /skip)",
-        caption_added: "✅ Подпись добавлена к изображению!",
-        add_more_images: "📷 Добавить еще изображения",
-        no_more_images: "✅ Больше изображений не добавлено. Нажмите 'завершить' чтобы создать заказ",
-        caption_skipped: "✅ Подпись пропущена. Отправьте новое изображение или нажмите 'завершить'",
-        skip: "⏭️ Пропустить",
-        skip_caption: "⏭️ Без подписи",
-        no_images: "📭 Продолжить без изображений",
-        send_images_or_skip: "📷 Отправьте изображения или ⏭️ пропустите",
-        send_images_first: "📷 Сначала отправьте изображения для заказа:",
-        notes_prompt: "💬 Введите особые инструкции:",
+        notes_prompt: "💬 Введите специальные инструкции:",
         skip_notes: "⏭️ Пропустить инструкции",
         no_notes: "📝 Продолжить без инструкций",
+        caption_added: "✅ Подпись добавлена к фото",
+        caption_skipped: "⏭️ Подпись не добавлена",
+        add_more_images: "➕ Добавить еще фото",
+        send_images_or_skip: "📷 Отправьте фото или пропустите:",
+        delivery_option: "🚚 Выберите доставку или самовывоз:",
+        pickup: "🏠 Самовывоз",
+        delivery: "🚚 Доставка",
+        address_prompt: "📍 Введите адрес доставки:",
+        price_prompt: "💰 Введите цену продукта:",
+        cake_size_prompt: "🎂 Выберите размер торта:",
+        size_12: "12 кусочков",
+        size_8: "8 кусочков",
+        choose_date_from_calendar: "📅 Пожалуйста, выберите дату через календарь 👆"
     }
 };
 
 // In-memory sessions
-const sessions = {};       // for orders
-const regSessions = {};    // for registration
-const userLanguages = {};  // to store user language preferences
+const sessions = {};
+const regSessions = {};
+const userLanguages = {};
+const loggedOutUsers = {};
+const rejectedMediaGroups = new Set();
 
-// Helper function to get user language
-function getUserLanguage(userId) {
-    return userLanguages[userId] || 'uzbek'; // Default to Uzbek
+// Helper functions
+async function isUserRegistered(userId) {
+    if (loggedOutUsers[userId]) return false;
+    try {
+        const user = await User.findOne({ telegramId: String(userId) });
+        return !!user;
+    } catch (err) {
+        console.error("❌ Error checking user registration:", err.message);
+        return false;
+    }
 }
 
-// ---------- ROLE-BASED COMMANDS ----------
+async function getUserLanguage(userId) {
+    return userLanguages[userId] || 'uzbek';
+}
+
 async function setCommandsForUser(ctx, role) {
     try {
-        const lang = getUserLanguage(ctx.from.id);
+        const lang = await getUserLanguage(ctx.from.id);
 
         if (role === "admin") {
-            await bot.telegram.setMyCommands(
-                [
-                    { command: "neworder", description: lang === 'uzbek' ? "Yangi buyurtma qo'shish" : "Добавить новый заказ" },
-                    { command: "orders", description: lang === 'uzbek' ? "Barcha buyurtmalarni ko'rish" : "Просмотреть все заказы" },
-                    { command: "bakers", description: lang === 'uzbek' ? "Barcha Qandolatchilarni ro'yxati" : "Список всех пекарей" },
-                    { command: "logout", description: lang === 'uzbek' ? "Chiqish" : "Выйти" },
-                ],
-                { scope: { type: "chat", chat_id: ctx.chat.id } }
-            );
+            await ctx.telegram.setMyCommands([
+                { command: "neworder", description: lang === 'uzbek' ? "Yangi buyurtma qo'shish" : "Добавить новый заказ" },
+                { command: "orders", description: lang === 'uzbek' ? "Barcha buyurtmalarni ko'rish" : "Просмотреть все заказы" },
+                { command: "bakers", description: lang === 'uzbek' ? "Barcha Qandolatchilarni ro'yxati" : "Список всех пекарей" },
+                { command: "language", description: lang === 'uzbek' ? "Tilni o'zgartirish" : "Изменить язык" },
+                { command: "logout", description: lang === 'uzbek' ? "Chiqish" : "Выйти" },
+            ], { scope: { type: "chat", chat_id: ctx.chat.id } });
         } else if (role === "baker") {
-            await bot.telegram.setMyCommands(
-                [
-                    { command: "orders", description: lang === 'uzbek' ? "Menga topshirilgan buyurtmalar" : "Просмотреть мои заказы" },
-                    { command: "logout", description: lang === 'uzbek' ? "Chiqish" : "Выйти" },
-                ],
-                { scope: { type: "chat", chat_id: ctx.chat.id } }
-            );
+            await ctx.telegram.setMyCommands([
+                { command: "orders", description: lang === 'uzbek' ? "Menga topshirilgan buyurtmalar" : "Просмотреть мои заказы" },
+                { command: "language", description: lang === 'uzbek' ? "Tilni o'zgartirish" : "Изменить язык" },
+                { command: "logout", description: lang === 'uzbek' ? "Chiqish" : "Выйти" },
+            ], { scope: { type: "chat", chat_id: ctx.chat.id } });
         } else {
-            await bot.telegram.setMyCommands(
-                [{ command: "register", description: lang === 'uzbek' ? "Admin yoki Qandolatchi sifatida ro'yxatdan o'tish" : "Зарегистрироваться как Админ или Пекарь" }],
-                { scope: { type: "chat", chat_id: ctx.chat.id } }
-            );
+            await ctx.telegram.setMyCommands([
+                { command: "register", description: lang === 'uzbek' ? "Admin yoki Qandolatchi sifatida ro'yxatdan o'tish" : "Зарегистрироваться как Админ или Пекарь" },
+                { command: "language", description: lang === 'uzbek' ? "Tilni o'zgartirish" : "Изменить язык" }
+            ], { scope: { type: "chat", chat_id: ctx.chat.id } });
         }
     } catch (err) {
         console.error("❌ Error setting commands:", err.message);
     }
 }
 
-// ========== Calendar Helper Functions ==========
-
+// Calendar Helper Functions
 function generateCalendar(date, userId) {
-    const lang = getUserLanguage(userId);
+    const lang = userLanguages[userId] || 'uzbek';
     const t = translations[lang];
 
     const startDay = startOfWeek(startOfMonth(date));
@@ -241,9 +247,7 @@ function generateCalendar(date, userId) {
     const monthName = t.months[date.getMonth()];
     const year = date.getFullYear();
 
-    calendar.push([
-        Markup.button.callback(`${monthName} ${year}`, 'noop')
-    ]);
+    calendar.push([Markup.button.callback(`${monthName} ${year}`, 'noop')]);
 
     // Add day abbreviations
     const dayAbbreviations = lang === 'uzbek'
@@ -279,18 +283,10 @@ function generateCalendar(date, userId) {
     return Markup.inlineKeyboard(calendar);
 }
 
-// ---------- MONGODB CONNECTION ----------
-mongoose
-    .connect(process.env.MONGO_URI)
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         console.log("✅ MongoDB Connected");
-
-        // Debug middleware should be first
-        bot.use((ctx, next) => {
-            console.log("📩 Update received:", ctx.updateType, ctx.update.message?.text || ctx.update.callback_query?.data || "No text");
-            return next();
-        });
-
         setupBotHandlers();
         bot.launch();
         console.log("🤖 Zarinka Bot running...");
@@ -298,52 +294,54 @@ mongoose
     .catch((err) => console.log("❌ MongoDB connection error:", err));
 
 function setupBotHandlers() {
-    //
-    // ======================= START =======================
-    //
+    // Start command
     bot.start(async (ctx) => {
         try {
-            // Ask for language preference
+            const isRegistered = await isUserRegistered(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
+
+            if (isRegistered) {
+                const user = await User.findOne({ telegramId: String(ctx.from.id) });
+                const t = translations[lang];
+                await ctx.reply(`${t.welcome_back}${user.firstName} ${user.lastName}!${t.logged_in_as}${user.role}${t.role}`);
+                await setCommandsForUser(ctx, user.role);
+            } else {
+                await ctx.reply(
+                    "👋 Welcome! / Xush kelibsiz! / Добро пожаловать!\n\n🇺🇿 Iltimos, tilni tanlang:\n🇷🇺 Пожалуйста, выберите язык:",
+                    Markup.inlineKeyboard([
+                        [Markup.button.callback("🇺🇿 O'zbek tili", "set_lang_uzbek")],
+                        [Markup.button.callback("🇷🇺 Русский язык", "set_lang_russian")]
+                    ])
+                );
+            }
+        } catch (err) {
+            console.error("❌ Start command error:", err.message);
+            await ctx.reply("⚠️ Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
+        }
+    });
+
+    // Language command
+    bot.command("language", async (ctx) => {
+        try {
+            const lang = await getUserLanguage(ctx.from.id);
             await ctx.reply(
-                "Please choose your language / Iltimos, tilni tanlang / Пожалуйста, выберите язык:",
+                lang === 'uzbek' ? "🌐 Tilni o'zgartirish:" : "🌐 Изменить язык:",
                 Markup.inlineKeyboard([
-                    [Markup.button.callback("O'zbek tili", "set_lang_uzbek")],
-                    [Markup.button.callback("Русский язык", "set_lang_russian")],
+                    [Markup.button.callback("🇺🇿 O'zbek tili", "change_lang_uzbek")],
+                    [Markup.button.callback("🇷🇺 Русский язык", "change_lang_russian")]
                 ])
             );
         } catch (err) {
-            console.error("❌ Start command error:", err.message);
-            ctx.reply("⚠️ Something went wrong. Please try again.");
+            console.error("❌ Language command error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
         }
     });
 
-    // Language selection handler
-    bot.action(/set_lang_(.+)/, async (ctx) => {
-        try {
-            const lang = ctx.match[1];
-            userLanguages[ctx.from.id] = lang;
-            const t = translations[lang];
-
-            await setCommandsForUser(ctx, null);
-            await ctx.editMessageText(t.welcome);
-            await ctx.answerCbQuery();
-        } catch (err) {
-            console.error("❌ Language selection error:", err.message);
-            await ctx.answerCbQuery("⚠️ Something went wrong. Please try again.");
-        }
-    });
-
-    bot.command("test", (ctx) => {
-        console.log("Test command received");
-        ctx.reply("✅ Test working!");
-    });
-
-
-    // ======================= REGISTRATION =======================
+    // Register command
     bot.command("register", async (ctx) => {
-        console.log("Register command received");
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
             regSessions[ctx.from.id] = { step: "choose_role" };
@@ -351,138 +349,52 @@ function setupBotHandlers() {
                 t.who_are_you,
                 Markup.inlineKeyboard([
                     [Markup.button.callback(t.admin, "role_admin")],
-                    [Markup.button.callback(t.baker, "role_baker")],
+                    [Markup.button.callback(t.baker, "role_baker")]
                 ])
             );
         } catch (err) {
             console.error("❌ Register command error:", err.message);
-            ctx.reply("⚠️ Registration failed. Please try again.");
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].registration_failed);
         }
     });
 
-    // Handle role choice
-    bot.action(/role_(.+)/, async (ctx) => {
-        console.log("Role action received:", ctx.match[1]);
-        try {
-            const role = ctx.match[1];
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            regSessions[ctx.from.id] = { step: "phone", role };
-
-            await ctx.reply(
-                t.phone_prompt,
-                Markup.keyboard([Markup.button.contactRequest(t.share_phone)])
-                    .oneTime()
-                    .resize()
-            );
-            await ctx.answerCbQuery();
-        } catch (err) {
-            console.error("❌ Role selection error:", err.message);
-            await ctx.answerCbQuery("⚠️ Something went wrong. Please try /register again.");
-        }
-    });
-
-    // ======================= LOGOUT =======================
-
-    bot.command("logout", async (ctx) => {
-        console.log("Logout command received");
-        try {
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            const user = await User.findOne({ telegramId: String(ctx.from.id) });
-
-            if (!user) {
-                return ctx.reply(t.not_registered_yet);
-            }
-
-            // Just clear sessions and update commands, DON'T delete the user
-            delete regSessions[ctx.from.id];
-            delete sessions[ctx.from.id];
-            await setCommandsForUser(ctx, null);
-
-            ctx.reply(t.logout_success);
-        } catch (err) {
-            console.error("❌ Logout error:", err.message);
-            ctx.reply(t.logout_error);
-        }
-    });
-
-    // ======================= ORDERS =======================
+    // Neworder command
     bot.command("neworder", async (ctx) => {
-        console.log("Neworder command received");
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
-
             const user = await User.findOne({ telegramId: String(ctx.from.id) });
-            if (!user || user.role !== "admin") {
-                return ctx.reply(t.only_admins);
-            }
+
+            if (!user || user.role !== "admin") return ctx.reply(t.only_admins);
 
             sessions[ctx.from.id] = { step: 1, data: {} };
-            ctx.reply(t.customer_name);
+            await ctx.reply(t.customer_name);
         } catch (err) {
             console.error("❌ Neworder command error:", err.message);
-            ctx.reply(t.something_wrong);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
         }
     });
 
-    // ======================= BAKERS LIST =======================
-    bot.command("bakers", async (ctx) => {
-        console.log("Bakers command received");
-        try {
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            const user = await User.findOne({ telegramId: String(ctx.from.id) });
-            console.log("🔎 Admin lookup:", user);
-
-            if (!user || user.role !== "admin") {
-                return ctx.reply(t.only_admins);
-            }
-
-            const bakers = await User.find({ role: "baker" });
-
-            if (!bakers || bakers.length === 0) {
-                return ctx.reply(t.no_bakers);
-            }
-
-            let message = t.bakers_list;
-            bakers.forEach((b, i) => {
-                message += `${i + 1}. ${b.firstName} ${b.lastName} 📞 ${b.phone}\n`;
-            });
-
-            return ctx.reply(message);
-        } catch (err) {
-            console.error("❌ Bakers list error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            return ctx.reply(t.something_wrong);
-        }
-    });
-
+    // Orders command
     bot.command("orders", async (ctx) => {
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
-
             const user = await User.findOne({ telegramId: String(ctx.from.id) });
-            if (!user) {
-                return ctx.reply(t.not_registered);
-            }
 
-            let orders;
+            if (!user) return ctx.reply(t.not_registered);
+
             if (user.role === "admin") {
-                orders = await Order.find().populate('assignedBaker', 'firstName lastName');
+                const orders = await Order.find().populate('assignedBaker', 'firstName lastName');
+                if (!orders.length) return ctx.reply(t.no_orders);
 
-                // Добавьте этот блок:
                 let message = t.all_orders;
                 orders.forEach((order, index) => {
-                    const bakerName = order.assignedBaker
-                        ? `${order.assignedBaker.firstName} ${order.assignedBaker.lastName}`
-                        : lang === 'uzbek' ? "Topshirilmagan" : "Не назначено";
+                    const bakerName = order.assignedBaker ?
+                        `${order.assignedBaker.firstName} ${order.assignedBaker.lastName}` :
+                        t.no_assignment;
 
                     message += `🆔 ${lang === 'uzbek' ? 'Buyurtma' : 'Заказ'} ${index + 1}\n`;
                     message += `👤 ${lang === 'uzbek' ? 'Mijoz' : 'Клиент'}: ${order.customerName}\n`;
@@ -491,55 +403,31 @@ function setupBotHandlers() {
                     message += `👨‍🍳 ${lang === 'uzbek' ? 'Qandolatchi' : 'Пекарь'}: ${bakerName}\n`;
                     message += `${t.delivery}${order.deliveryDate}\n`;
                     message += `${t.status}${order.status}\n`;
-
-                    // Add image count info
-                    if (order.images && order.images.length > 0) {
-                        message += `📸 ${lang === 'uzbek' ? 'Rasmlar' : 'Изображения'}: ${order.images.length}\n`;
-                    }
-
-                    if (order.specialInstructions) {
-                        message += `${t.instructions}${order.specialInstructions}\n`;
-                    }
                     message += `────────────────────\n`;
                 });
 
-                ctx.reply(message);
-                return;
+                return ctx.reply(message);
             } else if (user.role === "baker") {
-                orders = await Order.find({ assignedBaker: user._id }).populate('assignedBaker', 'firstName lastName');
-                if (!orders || orders.length === 0) {
-                    return ctx.reply(t.no_orders);
-                }
+                const orders = await Order.find({ assignedBaker: user._id }).populate('assignedBaker', 'firstName lastName');
+                if (!orders.length) return ctx.reply(t.no_orders);
 
-                const bakerOrders = orders.filter(order =>
-                    order.assignedBaker && order.assignedBaker._id.equals(user._id)
-                );
-
-                for (const order of bakerOrders) {
+                for (const order of orders) {
                     let message = `${t.order}${order.customerName}\n`;
                     message += `${t.product}${order.productName}\n`;
                     message += `🔢 ${lang === 'uzbek' ? 'Miqdori' : 'Количество'}: ${order.quantity}\n`;
                     message += `${t.delivery}${order.deliveryDate}\n`;
                     message += `${t.status}${order.status}\n`;
-                    if (order.specialInstructions) {
-                        message += `${t.instructions}${order.specialInstructions}\n`;
-                    }
 
                     let buttons = [];
-
                     if (order.status === 'pending') {
                         buttons = [
-                            [
-                                Markup.button.callback(t.accept, `accept_${order._id}`),
-                                Markup.button.callback(t.reject, `reject_${order._id}`)
-                            ]
+                            [Markup.button.callback(t.accept, `accept_${order._id}`),
+                            Markup.button.callback(t.reject, `reject_${order._id}`)]
                         ];
                     } else if (order.status === 'accepted') {
                         buttons = [
-                            [
-                                Markup.button.callback(t.in_progress, `progress_${order._id}`),
-                                Markup.button.callback(t.complete, `complete_${order._id}`)
-                            ]
+                            [Markup.button.callback(t.in_progress, `progress_${order._id}`),
+                            Markup.button.callback(t.complete, `complete_${order._id}`)]
                         ];
                     } else if (order.status === 'in_progress') {
                         buttons = [
@@ -547,672 +435,526 @@ function setupBotHandlers() {
                         ];
                     }
 
-                    // Если есть изображения, отправляем их как media group с первым caption = message
-                    if (order.images && order.images.length > 0) {
-                        // Main photo with caption + buttons
-                        await ctx.replyWithPhoto(order.images[0].fileId, {
-                            caption: message,
-                            ...Markup.inlineKeyboard(buttons),
-                        });
-
-                        // Send remaining photos without captions
-                        for (let i = 1; i < order.images.length; i++) {
-                            await ctx.replyWithPhoto(order.images[i].fileId);
-                        }
-                    } else {
-                        // No images → just text + buttons
-                        await ctx.reply(message, Markup.inlineKeyboard(buttons));
-                    }
+                    await ctx.reply(message, Markup.inlineKeyboard(buttons));
                 }
-                return;
             }
-
-            // ... rest of admin order viewing code ...
         } catch (err) {
             console.error("❌ Orders command error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            ctx.reply(t.something_wrong);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
         }
     });
 
-    // Helper function to send order with images
-    async function sendOrderWithImages(ctx, order, message, buttons = null) {
-        const lang = getUserLanguage(ctx.from.id);
-        const t = translations[lang];
-
-        // Send the order message
-        if (buttons) {
-            await ctx.editMessageText(message, Markup.inlineKeyboard(buttons));
-        } else {
-            await ctx.editMessageText(message);
-        }
-
-        // Send images if they exist
-        if (order.images && order.images.length > 0) {
-            for (const image of order.images) {
-                try {
-                    await ctx.replyWithPhoto(image.fileId, {
-                        caption: image.caption || `${lang === 'uzbek' ? 'Buyurtma rasmi' : 'Изображение заказа'}`
-                    });
-                } catch (error) {
-                    try {
-                        await ctx.replyWithDocument(image.fileId, {
-                            caption: image.caption || `${lang === 'uzbek' ? 'Buyurtma fayli' : 'Файл заказа'}`
-                        });
-                    } catch (docError) {
-                        await ctx.reply(
-                            `📄 ${lang === 'uzbek' ? 'Fayl' : 'Файл'}: ${image.filename}\n` +
-                            (image.caption ? `📝 ${image.caption}\n` : '')
-                        );
-                    }
-                }
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
-        }
-    }
-
-    // Update all order action handlers to use the helper function
-    bot.action(/accept_(.+)/, async (ctx) => {
+    // Bakers command
+    bot.command("bakers", async (ctx) => {
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
-
-            const orderId = ctx.match[1];
             const user = await User.findOne({ telegramId: String(ctx.from.id) });
 
-            if (!user || user.role !== "baker") {
-                await ctx.answerCbQuery(t.only_bakers_accept);
-                return;
-            }
+            if (!user || user.role !== "admin") return ctx.reply(t.only_admins);
 
-            const order = await Order.findById(orderId).populate('assignedBaker');
-            if (!order) {
-                await ctx.answerCbQuery(t.order_not_found);
-                return;
-            }
+            const bakers = await User.find({ role: "baker" });
+            if (!bakers.length) return ctx.reply(t.no_bakers);
 
-            if (!order.assignedBaker || !order.assignedBaker._id.equals(user._id)) {
-                await ctx.answerCbQuery(t.not_assigned_to_you);
-                return;
-            }
+            let message = t.bakers_list;
+            bakers.forEach((b, i) => {
+                message += `${i + 1}. ${b.firstName} ${b.lastName} 📞 ${b.phone}\n`;
+            });
 
-            if (order.status !== 'pending') {
-                await ctx.answerCbQuery(`${t.order_already_status}${order.status}.`);
-                return;
-            }
-
-            order.status = 'accepted';
-            await order.save();
-
-            await ctx.answerCbQuery(t.order_accepted);
-
-            // Use helper function to show order with images
-            const message = ctx.update.callback_query.message.text + `\n✅ ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'QABUL QILINDI' : 'ПРИНЯТ'}`;
-            const buttons = [
-                [
-                    Markup.button.callback(t.in_progress, `progress_${order._id}`),
-                    Markup.button.callback(t.complete, `complete_${order._id}`)
-                ]
-            ];
-
-            await sendOrderWithImages(ctx, order, message, buttons);
-
+            return ctx.reply(message);
         } catch (err) {
-            console.error("❌ Accept order error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
+            console.error("❌ Bakers command error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
         }
     });
 
-    // Similarly update other action handlers (reject_, progress_, complete_)
-    bot.action(/reject_(.+)/, async (ctx) => {
+    // Logout command
+    bot.command("logout", async (ctx) => {
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
-
-            const orderId = ctx.match[1];
             const user = await User.findOne({ telegramId: String(ctx.from.id) });
 
-            if (!user || user.role !== "baker") {
-                await ctx.answerCbQuery(t.only_bakers_accept);
-                return;
-            }
+            if (!user) return ctx.reply(t.not_registered_yet);
 
-            const order = await Order.findById(orderId).populate('assignedBaker');
-            if (!order) {
-                await ctx.answerCbQuery(t.order_not_found);
-                return;
-            }
+            loggedOutUsers[ctx.from.id] = true;
+            delete regSessions[ctx.from.id];
+            delete sessions[ctx.from.id];
+            await setCommandsForUser(ctx, null);
 
-            if (!order.assignedBaker || !order.assignedBaker._id.equals(user._id)) {
-                await ctx.answerCbQuery(t.not_assigned_to_you);
-                return;
-            }
-
-            if (order.status !== 'pending') {
-                await ctx.answerCbQuery(`${t.order_already_status}${order.status}.`);
-                return;
-            }
-
-            order.status = 'rejected';
-            await order.save();
-
-            await ctx.answerCbQuery(t.order_rejected);
-
-            // Use helper function
-            const message = ctx.update.callback_query.message.text + `\n❌ ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'RAD ETILDI' : 'ОТКЛОНЕНО'}`;
-            await sendOrderWithImages(ctx, order, message);
-
+            await ctx.reply(t.logout_success);
         } catch (err) {
-            console.error("❌ Reject order error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
+            console.error("❌ Logout error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].logout_error);
         }
     });
 
-    bot.action(/progress_(.+)/, async (ctx) => {
+    // Language change handlers
+    bot.action(/change_lang_(.+)/, async (ctx) => {
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = ctx.match[1];
+            userLanguages[ctx.from.id] = lang;
             const t = translations[lang];
 
-            const orderId = ctx.match[1];
-            const user = await User.findOne({ telegramId: String(ctx.from.id) });
-
-            if (!user || user.role !== "baker") {
-                await ctx.answerCbQuery(t.only_bakers_accept);
-                return;
-            }
-
-            const order = await Order.findById(orderId).populate('assignedBaker');
-            if (!order) {
-                await ctx.answerCbQuery(t.order_not_found);
-                return;
-            }
-
-            if (!order.assignedBaker || !order.assignedBaker._id.equals(user._id)) {
-                await ctx.answerCbQuery(t.not_assigned_to_you);
-                return;
-            }
-
-            if (order.status !== 'accepted') {
-                await ctx.answerCbQuery(`${t.must_be_accepted}${order.status}`);
-                return;
-            }
-
-            order.status = 'in_progress';
-            await order.save();
-
-            await ctx.answerCbQuery(t.order_in_progress);
+            await ctx.answerCbQuery();
             await ctx.editMessageText(
-                ctx.update.callback_query.message.text + `\n🔄 ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'JARAYONDA' : 'В ПРОЦЕССЕ'}`,
-                Markup.inlineKeyboard([
-                    [Markup.button.callback(t.complete, `complete_${order._id}`)]
-                ])
+                lang === 'uzbek' ? "✅ Til muvaffaqiyatli o'zgartirildi" : "✅ Язык успешно изменен"
             );
         } catch (err) {
-            console.error("❌ Progress order error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
+            console.error("❌ Language change error:", err.message);
+            await ctx.answerCbQuery("⚠️ Xatolik yuz berdi / Произошла ошибка");
         }
     });
 
-    bot.action(/complete_(.+)/, async (ctx) => {
+    bot.action(/set_lang_(.+)/, async (ctx) => {
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = ctx.match[1];
+            userLanguages[ctx.from.id] = lang;
             const t = translations[lang];
 
-            const orderId = ctx.match[1];
-            const user = await User.findOne({ telegramId: String(ctx.from.id) });
-
-            if (!user || user.role !== "baker") {
-                await ctx.answerCbQuery(t.only_bakers_accept);
-                return;
-            }
-
-            const order = await Order.findById(orderId).populate('assignedBaker');
-            if (!order) {
-                await ctx.answerCbQuery(t.order_not_found);
-                return;
-            }
-
-            if (!order.assignedBaker || !order.assignedBaker._id.equals(user._id)) {
-                await ctx.answerCbQuery(t.not_assigned_to_you);
-                return;
-            }
-
-            if (order.status !== 'in_progress') {
-                await ctx.answerCbQuery(`${t.must_be_in_progress}${order.status}`);
-                return;
-            }
-
-            order.status = 'completed';
-            await order.save();
-
-            await ctx.answerCbQuery(t.order_completed);
-            await ctx.editMessageText(
-                ctx.update.callback_query.message.text + `\n🎉 ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${lang === 'uzbek' ? 'TUGATILDI' : 'ЗАВЕРШЕНО'}`,
-                Markup.inlineKeyboard([]) // Remove buttons
-            );
+            await ctx.answerCbQuery();
+            await ctx.editMessageText(t.welcome);
         } catch (err) {
-            console.error("❌ Complete order error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
+            console.error("❌ Language selection error:", err.message);
+            await ctx.answerCbQuery("⚠️ Something went wrong");
         }
     });
 
-    // Handle phone (contact message) - MUST come before general text handler
+    bot.action(/role_(.+)/, async (ctx) => {
+        try {
+            const role = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+
+            regSessions[ctx.from.id] = { step: "phone", role };
+            await ctx.reply(
+                t.phone_prompt,
+                Markup.keyboard([[Markup.button.contactRequest(t.share_phone)]])
+                    .oneTime()
+                    .resize()
+            );
+            await ctx.answerCbQuery();
+        } catch (err) {
+            console.error("❌ Role selection error:", err.message);
+            await ctx.answerCbQuery("⚠️ Something went wrong");
+        }
+    });
+
     bot.on("contact", async (ctx) => {
-        console.log("Contact received");
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
-
             const session = regSessions[ctx.from.id];
+
             if (!session || session.step !== "phone") return;
 
             const phone = ctx.message.contact.phone_number;
-
-            // 🔎 Check if user already exists by phone
-            let existingUser = await User.findOne({ phone });
+            const existingUser = await User.findOne({ phone });
 
             if (existingUser) {
-                // ✅ Already registered → login
-                ctx.reply(
-                    `${t.welcome_back}${existingUser.firstName} ${existingUser.lastName}!${t.logged_in_as}${existingUser.role}${t.role}`
-                );
-
-                // Update telegramId in case changed device
+                const userT = translations[await getUserLanguage(ctx.from.id)];
+                await ctx.reply(`${userT.welcome_back}${existingUser.firstName} ${existingUser.lastName}!${userT.logged_in_as}${existingUser.role}${userT.role}`);
                 existingUser.telegramId = String(ctx.from.id);
                 await existingUser.save();
-
                 await setCommandsForUser(ctx, existingUser.role);
-
-                // IMMEDIATELY delete the session and remove keyboard
                 delete regSessions[ctx.from.id];
-
-                // Remove the contact request keyboard with a new message
-                await ctx.reply(t.login_successful, Markup.removeKeyboard());
-
-                // Return early to prevent any further processing
+                await ctx.reply(userT.login_successful, Markup.removeKeyboard());
                 return;
-            } else {
-                // 🆕 Not registered → ask first name
-                session.phone = phone;
-                session.step = "first_name";
-                // Remove the keyboard first, then ask for name
-                await ctx.reply(t.registration_started, Markup.removeKeyboard());
-                ctx.reply(t.first_name_prompt);
             }
+
+            session.phone = phone;
+            session.step = "first_name";
+            await ctx.reply(t.registration_started, Markup.removeKeyboard());
+            await ctx.reply(t.first_name_prompt);
         } catch (err) {
             console.error("❌ Registration error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            ctx.reply(t.registration_failed);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].registration_failed);
         }
     });
 
-    // Handle first/last name and order creation
     bot.on("text", async (ctx) => {
-        console.log("Text received:", ctx.message.text);
-
-        // Skip if it's a command
-        if (ctx.message.text.startsWith('/')) return;
-
-        // Skip if it's the contact share button text
-        if (ctx.message.text.includes("Share Phone") || ctx.message.text.includes("📱")) {
-            console.log("Ignoring contact share button text");
-            return;
-        }
+        const text = ctx.message.text;
+        if (text.startsWith('/')) return;
 
         try {
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
-            // Check if registration session still exists
+            // Check if it's the contact share button text
+            if (text.includes("Share Phone") || text.includes("📱")) {
+                console.log("Ignoring contact share button text");
+                return;
+            }
+
+            // Check registration session first
             const regSession = regSessions[ctx.from.id];
             if (regSession) {
-                switch (regSession.step) {
-                    case "first_name":
-                        regSession.firstName = ctx.message.text;
-                        regSession.step = "last_name";
-                        return ctx.reply(t.last_name_prompt);
-
-                    case "last_name":
-                        regSession.lastName = ctx.message.text;
-
-                        const newUser = new User({
-                            telegramId: String(ctx.from.id),
-                            role: regSession.role,
-                            firstName: regSession.firstName,
-                            lastName: regSession.lastName,
-                            phone: regSession.phone,
-                        });
-
-                        await newUser.save();
-                        ctx.reply(
-                            `✅ ${regSession.role}${t.registered}${regSession.firstName} ${regSession.lastName}.`
-                        );
-
-                        await setCommandsForUser(ctx, regSession.role);
-                        delete regSessions[ctx.from.id];
-                        return;
-                }
+                await handleRegistrationText(ctx, text, regSession, t);
+                return;
             }
 
-            // Check order sessions
+            // Check order session
             const orderSession = sessions[ctx.from.id];
             if (orderSession && orderSession.step) {
-                console.log("Processing order session step:", orderSession.step);
-                const text = ctx.message.text;
-
-                switch (orderSession.step) {
-                    case 1: // Customer name
-                        orderSession.data.customerName = text;
-                        orderSession.step = 2;
-                        return ctx.reply(t.product_name);
-
-                    case 2: // Product name
-                        orderSession.data.productName = text;
-                        orderSession.step = 3;
-                        return ctx.reply(t.quantity);
-
-                    case 3: // Quantity
-                        if (isNaN(text) || parseInt(text) <= 0) {
-                            return ctx.reply(t.valid_quantity);
-                        }
-                        orderSession.data.quantity = parseInt(text);
-                        orderSession.step = 4;
-
-                        // Get all available bakers
-                        const bakers = await User.find({ role: "baker" });
-                        if (bakers.length === 0) {
-                            orderSession.data.assignedBaker = null;
-                            orderSession.step = 5;
-
-                            // Show calendar for delivery date
-                            orderSession.calendarDate = new Date();
-                            await ctx.reply(
-                                t.select_date,
-                                generateCalendar(orderSession.calendarDate, ctx.from.id)
-                            );
-                            break;
-                        }
-
-                        // Create buttons for bakers
-                        const bakerButtons = bakers.map(baker =>
-                            [Markup.button.callback(`${baker.firstName} ${baker.lastName}`, `assign_baker_${baker._id}`)]
-                        );
-                        bakerButtons.push([Markup.button.callback(t.no_assignment, "assign_baker_none")]);
-
-                        await ctx.reply(
-                            t.assign_baker,
-                            Markup.inlineKeyboard(bakerButtons)
-                        );
-                        break;
-
-                    case 5: // After date selection - go to IMAGES first
-                        orderSession.data.deliveryDate = text;
-                        orderSession.step = 6; // Images step
-
-                        // Initialize images array
-                        orderSession.data.images = [];
-
-                        await ctx.reply(
-                            t.send_images_first,
-                            Markup.inlineKeyboard([
-                                [Markup.button.callback(t.skip, 'skip_images')],
-                                [Markup.button.callback(t.finish_order, 'finish_order')]
-                            ])
-                        );
-                        break;
-
-                    case 7: // Notes step (after images)
-                        orderSession.data.specialInstructions = text;
-                        orderSession.step = 8; // Final confirmation
-
-                        // Create the order
-                        const order = new Order({
-                            customerName: orderSession.data.customerName,
-                            productName: orderSession.data.productName,
-                            quantity: orderSession.data.quantity,
-                            assignedBaker: orderSession.data.assignedBaker,
-                            deliveryDate: orderSession.data.deliveryDate,
-                            specialInstructions: orderSession.data.specialInstructions,
-                            images: orderSession.data.images || [],
-                            status: 'pending',
-                            createdBy: ctx.from.id
-                        });
-
-                        await order.save();
-
-                        await ctx.reply(t.order_created);
-                        delete sessions[ctx.from.id];
-                        break;
-
-                    case 6: // Image caption handling
-                        // If we're in step 6 and receiving text, it could be a caption
-                        if (orderSession.data.lastImageId) {
-                            // Find the image and add caption
-                            const imageIndex = orderSession.data.images.findIndex(
-                                img => img.fileId === orderSession.data.lastImageId
-                            );
-
-                            if (imageIndex !== -1) {
-                                orderSession.data.images[imageIndex].caption = text;
-                                delete orderSession.data.lastImageId;
-
-                                await ctx.reply(t.caption_added, Markup.inlineKeyboard([
-                                    [Markup.button.callback(t.add_more_images, 'add_more_images')],
-                                    [Markup.button.callback(t.skip_notes, 'skip_to_notes')],
-                                    [Markup.button.callback(t.finish_order, 'finish_order')]
-                                ]));
-                            }
-                        }
-                        break;
+                // Handle notes input (step 10)
+                if (orderSession.step === 10) {
+                    orderSession.data.specialInstructions = text;
+                    await createOrder(ctx, orderSession);
+                    return;
                 }
-            } else {
-                console.log("No active sessions found, ignoring text");
+
+                // Handle other order steps
+                await handleOrderText(ctx, text, orderSession, t, lang);
+                return;
             }
+
+            console.log("No active sessions found, ignoring text");
 
         } catch (err) {
             console.error("❌ Text handler error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            ctx.reply(t.something_wrong);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
         }
     });
 
-    // Add image handler for order images
+    async function handleRegistrationText(ctx, text, regSession, t) {
+        switch (regSession.step) {
+            case "phone":
+                // Reject text input for phone number and show button again
+                await ctx.reply(
+                    "❌ Iltimos, telefon raqamingizni tugma orqali ulashing / Пожалуйста, поделитесь номером телефона с помощью кнопки",
+                    Markup.keyboard([[Markup.button.contactRequest(t.share_phone)]])
+                        .oneTime()
+                        .resize()
+                );
+                break;
+
+            case "first_name":
+                regSession.firstName = text;
+                regSession.step = "last_name";
+                await ctx.reply(t.last_name_prompt);
+                break;
+
+            case "last_name":
+                regSession.lastName = text;
+                const newUser = new User({
+                    telegramId: String(ctx.from.id),
+                    role: regSession.role,
+                    firstName: regSession.firstName,
+                    lastName: regSession.lastName,
+                    phone: regSession.phone
+                });
+
+                await newUser.save();
+                await ctx.reply(`✅ ${regSession.role}${t.registered}${regSession.firstName} ${regSession.lastName}.`);
+                await setCommandsForUser(ctx, regSession.role);
+                delete regSessions[ctx.from.id];
+                break;
+        }
+    }
+
+    async function handleOrderText(ctx, text, orderSession, t, lang) {
+        switch (orderSession.step) {
+            case 1: // Customer name
+                orderSession.data.customerName = text;
+                orderSession.step = 2;
+                await ctx.reply(t.product_name);
+                break;
+
+            case 2: // Product name
+                orderSession.data.productName = text;
+                orderSession.step = 3;
+                await ctx.reply(t.quantity);
+                break;
+
+            case 3: // Quantity
+                if (isNaN(text) || parseInt(text) <= 0) {
+                    await ctx.reply(t.valid_quantity);
+                    return;
+                }
+                orderSession.data.quantity = parseInt(text);
+                orderSession.step = 4;
+                await ctx.reply(
+                    t.cake_size_prompt,
+                    Markup.inlineKeyboard([
+                        [Markup.button.callback(t.size_12, "cake_size_12")],
+                        [Markup.button.callback(t.size_8, "cake_size_8")]
+                    ])
+                );
+                break;
+
+            case 5: // Price (after cake size selection)
+                if (isNaN(text) || parseInt(text) <= 0) {
+                    await ctx.reply(lang === 'uzbek'
+                        ? "❌ Iltimos, narx uchun haqiqiy raqam kiriting:"
+                        : "❌ Пожалуйста, введите действительное число для цены:");
+                    return;
+                }
+                orderSession.data.price = parseInt(text);
+                orderSession.step = 6;
+                await ctx.reply(
+                    t.delivery_option,
+                    Markup.inlineKeyboard([
+                        [Markup.button.callback(t.delivery, "delivery_type_delivery")],
+                        [Markup.button.callback(t.pickup, "delivery_type_pickup")]
+                    ])
+                );
+                break;
+
+            case 7: // Address for delivery
+                orderSession.data.address = text;
+                orderSession.step = 8;
+                orderSession.calendarDate = new Date();
+                await ctx.reply(t.select_date, generateCalendar(orderSession.calendarDate, ctx.from.id));
+                break;
+
+            case 10: // Special instructions (notes)
+                orderSession.data.specialInstructions = text;
+                await createOrder(ctx, orderSession);
+                break;
+
+            default:
+                // Handle cases where user sends text during calendar or other non-text steps
+                if (orderSession.step === 8 || orderSession.step === 9) {
+                    await ctx.reply(
+                        t.choose_date_from_calendar
+                    );
+                }
+                break;
+        }
+    }
+
     bot.on(['photo', 'document'], async (ctx) => {
         try {
-            console.log("Media received:", ctx.updateType);
-
             const orderSession = sessions[ctx.from.id];
-            if (!orderSession || orderSession.step !== 6) { // Changed to step 6 for images
-                console.log("No active order session or wrong step");
+            if (!orderSession || orderSession.step !== 9) {
                 return;
             }
 
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
+
+            // Reject albums (multiple images)
+            if (ctx.message.media_group_id) {
+                if (rejectedMediaGroups.has(ctx.message.media_group_id)) {
+                    return;
+                }
+                rejectedMediaGroups.add(ctx.message.media_group_id);
+                return ctx.reply(lang === "uzbek"
+                    ? "Faqat bitta rasm yuborishingiz mumkin ❗️ Albom yubormang."
+                    : "Only one image is allowed ❗️ Do not send albums.");
+            }
 
             let fileId, filename;
 
             if (ctx.message.photo) {
-                // Handle photos
-                console.log("Photo received");
                 const photo = ctx.message.photo[ctx.message.photo.length - 1];
                 fileId = photo.file_id;
                 filename = `photo_${Date.now()}.jpg`;
             } else if (ctx.message.document && ctx.message.document.mime_type?.startsWith('image/')) {
-                // Handle image documents only
-                console.log("Image document received");
                 fileId = ctx.message.document.file_id;
                 filename = ctx.message.document.file_name || `image_${Date.now()}`;
             } else {
-                // Not an image, ignore
-                console.log("Non-image document received, ignoring");
                 return;
             }
 
-            // Initialize images array if it doesn't exist
-            if (!orderSession.data.images) {
-                orderSession.data.images = [];
+            // Reject if an image already exists in session
+            if (orderSession.data.images && orderSession.data.images.length > 0) {
+                return ctx.reply(lang === "uzbek"
+                    ? "Siz faqat bitta rasm yuborishingiz mumkin ❗️"
+                    : "You can only upload one image ❗️");
             }
 
-            // Store image info in session
-            orderSession.data.images.push({
-                fileId,
-                filename,
-                caption: ''
-            });
+            // Save the single image
+            orderSession.data.images = [{ fileId, filename }];
 
-            // Store the last image ID for caption handling
-            orderSession.data.lastImageId = fileId;
-
+            // Move to notes step WITH SKIP BUTTON
+            orderSession.step = 10;
             await ctx.reply(
-                t.image_received,
+                t.notes_prompt,
                 Markup.inlineKeyboard([
-                    [Markup.button.callback(t.skip_caption, 'skip_caption')],
-                    [Markup.button.callback(t.skip_notes, 'skip_to_notes')],
-                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                    [Markup.button.callback(t.skip_notes, 'skip_notes')]
                 ])
             );
 
         } catch (err) {
             console.error("❌ Image handling error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.reply(t.something_wrong);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
         }
     });
 
-    // Skip to notes button handler
-    bot.action('skip_to_notes', async (ctx) => {
-        try {
-            const session = sessions[ctx.from.id];
-            if (!session || session.step !== 6) {
-                await ctx.answerCbQuery("⚠️ Session expired.");
-                return;
-            }
-
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            // Move to notes step
-            session.step = 7;
-
-            await ctx.editMessageText(
-                t.notes_prompt,
-                Markup.inlineKeyboard([
-                    [Markup.button.callback(t.skip_notes, 'skip_notes')],
-                    [Markup.button.callback(t.finish_order, 'finish_order')]
-                ])
-            );
-
-            await ctx.answerCbQuery();
-        } catch (err) {
-            console.error("❌ Skip to notes error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
-        }
-    });
-
-    // Skip notes button handler
-    bot.action('skip_notes', async (ctx) => {
-        try {
-            const session = sessions[ctx.from.id];
-            if (!session || session.step !== 7) {
-                await ctx.answerCbQuery("⚠️ Session expired.");
-                return;
-            }
-
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            // Create the order without notes
-            const order = new Order({
-                customerName: session.data.customerName,
-                productName: session.data.productName,
-                quantity: session.data.quantity,
-                assignedBaker: session.data.assignedBaker,
-                deliveryDate: session.data.deliveryDate,
-                specialInstructions: '',
-                images: session.data.images || [],
-                status: 'pending',
-                createdBy: ctx.from.id
-            });
-
-            await order.save();
-
-            await ctx.editMessageText(t.order_created);
-            await ctx.answerCbQuery();
-            delete sessions[ctx.from.id];
-        } catch (err) {
-            console.error("❌ Skip notes error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
-        }
-    });
-
-    // Update the skip_images handler
     bot.action('skip_images', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session || session.step !== 6) {
+            if (!session || session.step !== 9) {
                 await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
 
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
-            // Move directly to notes step
-            session.step = 7;
-
-            await ctx.editMessageText(
+            // Skip images and move to notes WITH SKIP BUTTON
+            session.step = 10;
+            await ctx.deleteMessage();
+            await ctx.reply(
                 t.notes_prompt,
                 Markup.inlineKeyboard([
-                    [Markup.button.callback(t.skip_notes, 'skip_notes')],
-                    [Markup.button.callback(t.finish_order, 'finish_order')]
+                    [Markup.button.callback(t.skip_notes, 'skip_notes')]
                 ])
             );
-
             await ctx.answerCbQuery();
+
         } catch (err) {
             console.error("❌ Skip images error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.answerCbQuery(translations[lang].something_wrong);
         }
     });
 
-    // Update the finish_order handler to handle both steps
-    bot.action('finish_order', async (ctx) => {
+    bot.action('skip_notes', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session) {
+            if (!session || session.step !== 10) {
                 await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
 
-            const lang = getUserLanguage(ctx.from.id);
+            const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
-            // Create the order (handle both cases - with or without notes)
+            // Skip notes and automatically create order
+            await ctx.answerCbQuery();
+            await ctx.deleteMessage();
+            await createOrder(ctx, session);
+
+        } catch (err) {
+            console.error("❌ Skip notes error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.answerCbQuery(translations[lang].something_wrong);
+        }
+    });
+
+    bot.action(/cake_size_(.+)/, async (ctx) => {
+        try {
+            const size = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const session = sessions[ctx.from.id];
+
+            if (!session || session.step !== 4) return;
+
+            session.data.cakeSize = size === "12" ? t.size_12 : t.size_8;
+            session.step = 5; // Now step 5 is for price (after cake size)
+            await ctx.deleteMessage();
+            await ctx.reply(t.price_prompt); // Ask for price after size selection
+
+        } catch (err) {
+            console.error("❌ Cake size error:", err.message);
+            await ctx.answerCbQuery("⚠️ Error");
+        }
+    });
+
+    bot.action(/delivery_type_(.+)/, async (ctx) => {
+        try {
+            const type = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const session = sessions[ctx.from.id];
+
+            if (!session || session.step !== 6) return;
+
+            session.data.deliveryType = type;
+            if (type === "delivery") {
+                session.step = 7;
+                await ctx.deleteMessage();
+                await ctx.reply(t.address_prompt);
+            } else {
+                session.data.address = "";
+                session.step = 8;
+                session.calendarDate = new Date();
+                await ctx.deleteMessage();
+                await ctx.reply(t.select_date, generateCalendar(session.calendarDate, ctx.from.id));
+            }
+        } catch (err) {
+            console.error("❌ Delivery type error:", err.message);
+            await ctx.answerCbQuery("⚠️ Error");
+        }
+    });
+
+    bot.action(/select_date_(.+)/, async (ctx) => {
+        try {
+            const dateStr = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const session = sessions[ctx.from.id];
+
+            if (!session || session.step !== 8) {
+                await ctx.answerCbQuery(t.something_wrong);
+                return;
+            }
+
+            let selectedDate = dateStr === 'today' ? new Date() : new Date(dateStr);
+            session.data.deliveryDate = format(selectedDate, 'yyyy-MM-dd');
+            session.step = 9; // Step 9 for images
+
+            await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Tanlandi' : 'Выбрано'}: ${format(selectedDate, 'MMM dd, yyyy')}`);
+            await ctx.deleteMessage();
+
+            // Ask for images with skip button
+            await ctx.reply(
+                t.send_images_first,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback(t.skip_images, 'skip_images')]
+                ])
+            );
+        } catch (err) {
+            console.error("❌ Date selection error:", err.message);
+            await ctx.answerCbQuery("⚠️ Error");
+        }
+    });
+
+    bot.action(['prev_month', 'next_month'], async (ctx) => {
+        try {
+            const session = sessions[ctx.from.id];
+            if (!session || session.step !== 8) {
+                await ctx.answerCbQuery("⚠️ Session expired");
+                return;
+            }
+
+            session.calendarDate = addMonths(session.calendarDate, ctx.match[0] === 'prev_month' ? -1 : 1);
+            await ctx.answerCbQuery();
+            await ctx.editMessageText(
+                translations[await getUserLanguage(ctx.from.id)].select_date,
+                generateCalendar(session.calendarDate, ctx.from.id)
+            );
+        } catch (err) {
+            console.error("❌ Calendar navigation error:", err.message);
+            await ctx.answerCbQuery("⚠️ Error");
+        }
+    });
+
+    // Helper function to create order
+    async function createOrder(ctx, session) {
+        try {
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+
             const order = new Order({
                 customerName: session.data.customerName,
                 productName: session.data.productName,
                 quantity: session.data.quantity,
-                assignedBaker: session.data.assignedBaker,
+                cakeSize: session.data.cakeSize,
+                price: session.data.price,
+                deliveryType: session.data.deliveryType,
+                address: session.data.address || '',
                 deliveryDate: session.data.deliveryDate,
+                assignedBaker: session.data.assignedBaker || null,
                 specialInstructions: session.data.specialInstructions || '',
                 images: session.data.images || [],
                 status: 'pending',
@@ -1220,172 +962,28 @@ function setupBotHandlers() {
             });
 
             await order.save();
-
-            await ctx.editMessageText(t.order_created);
-            await ctx.answerCbQuery();
+            await ctx.reply(t.order_created);
             delete sessions[ctx.from.id];
         } catch (err) {
             console.error("❌ Order creation error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
         }
-    });
+    }
 
-    // Add baker assignment handler
-    bot.action(/assign_baker_(.+)/, async (ctx) => {
-        try {
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            const bakerId = ctx.match[1];
-            const session = sessions[ctx.from.id];
-
-            if (!session || session.step !== 4) {
-                await ctx.answerCbQuery(t.something_wrong);
-                return;
-            }
-
-            if (bakerId === 'none') {
-                session.data.assignedBaker = null;
-                await ctx.answerCbQuery(t.no_assignment);
-            } else {
-                session.data.assignedBaker = bakerId;
-                const baker = await User.findById(bakerId);
-                await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Topshirildi' : 'Назначено'} ${baker.firstName} ${baker.lastName}`);
-            }
-
-            session.step = 5;
-            session.calendarDate = new Date(); // Initialize calendar date
-
-            await ctx.deleteMessage();
-            await ctx.reply(
-                t.select_date,
-                generateCalendar(session.calendarDate, ctx.from.id)
-            );
-        } catch (err) {
-            console.error("❌ Baker assignment error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
-        }
-    });
-
-    // Add date selection handlers
-    bot.action(/select_date_(.+)/, async (ctx) => {
-        try {
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            const dateStr = ctx.match[1];
-            const session = sessions[ctx.from.id];
-
-            if (!session || session.step !== 5) {
-                await ctx.answerCbQuery(t.something_wrong);
-                return;
-            }
-
-            let selectedDate;
-            if (dateStr === 'today') {
-                selectedDate = new Date();
-            } else {
-                selectedDate = new Date(dateStr);
-            }
-
-            session.data.deliveryDate = format(selectedDate, 'yyyy-MM-dd');
-            session.step = 6; // Changed to step 6 for images
-
-            await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Tanlandi' : 'Выбрано'}: ${format(selectedDate, 'MMM dd, yyyy')}`);
-            await ctx.deleteMessage();
-
-            // Go to images step instead of notes
-            await ctx.reply(
-                t.send_images_first,
-                Markup.inlineKeyboard([
-                    [Markup.button.callback(t.skip, 'skip_images')],
-                    [Markup.button.callback(t.finish_order, 'finish_order')]
-                ])
-            );
-        } catch (err) {
-            console.error("❌ Date selection error:", err.message);
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            await ctx.answerCbQuery(t.something_wrong);
-        }
-    });
-
-    // Add calendar navigation handlers
-    bot.action('prev_month', async (ctx) => {
-        try {
-            const session = sessions[ctx.from.id];
-            if (!session || session.step !== 5) {
-                await ctx.answerCbQuery("⚠️ Session expired.");
-                return;
-            }
-
-            session.calendarDate = addMonths(session.calendarDate, -1);
-            await ctx.answerCbQuery();
-            await ctx.editMessageText(
-                translations[getUserLanguage(ctx.from.id)].select_date,
-                generateCalendar(session.calendarDate, ctx.from.id)
-            );
-        } catch (err) {
-            console.error("❌ Calendar navigation error:", err.message);
-            await ctx.answerCbQuery("⚠️ Navigation failed.");
-        }
-    });
-
-    bot.action('next_month', async (ctx) => {
-        try {
-            const session = sessions[ctx.from.id];
-            if (!session || session.step !== 5) {
-                await ctx.answerCbQuery("⚠️ Session expired.");
-                return;
-            }
-
-            session.calendarDate = addMonths(session.calendarDate, 1);
-            await ctx.answerCbQuery();
-            await ctx.editMessageText(
-                translations[getUserLanguage(ctx.from.id)].select_date,
-                generateCalendar(session.calendarDate, ctx.from.id)
-            );
-        } catch (err) {
-            console.error("❌ Calendar navigation error:", err.message);
-            await ctx.answerCbQuery("⚠️ Navigation failed.");
-        }
-    });
-
-    // Add noop handler for empty calendar buttons
+    // Noop handler
     bot.action('noop', async (ctx) => {
-        await ctx.answerCbQuery(); // Just acknowledge the click, do nothing
+        await ctx.answerCbQuery();
     });
 
     // Global error handler
     bot.catch((err, ctx) => {
-        console.error(`❌ Global error for ${ctx.updateType}:`, err);
-
-        try {
-            const lang = getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-
-            // Try to send a helpful error message
-            ctx.reply(t.something_wrong).catch(e => {
-                console.error("Could not send error message:", e);
-            });
-
-            // If it's a session error, clear the session
-            if (err.message.includes('session') || err.message.includes('step')) {
-                delete sessions[ctx.from.id];
-                ctx.reply("🔄 Iltimos, yangidan boshlang / Please start again").catch(e => {
-                    console.error("Could not send restart message:", e);
-                });
-            }
-        } catch (e) {
-            console.error("Error in global error handler:", e);
-        }
+        console.error(`❌ Global error:`, err);
+        const lang = getUserLanguage(ctx.from.id);
+        ctx.reply(translations[lang].something_wrong).catch(console.error);
     });
 }
 
-// Enable graceful stop
+// Graceful shutdown
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
