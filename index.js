@@ -601,7 +601,7 @@ function setupBotHandlers() {
             const orderSession = sessions[ctx.from.id];
             if (orderSession && orderSession.step) {
                 // Handle notes input (step 10)
-                if (orderSession.step === 10) {
+                if (orderSession.step === 11) {
                     orderSession.data.specialInstructions = text;
                     await createOrder(ctx, orderSession);
                     return;
@@ -696,42 +696,97 @@ function setupBotHandlers() {
                 }
                 orderSession.data.price = parseInt(text);
                 orderSession.step = 6;
-                await ctx.reply(
-                    t.delivery_option,
-                    Markup.inlineKeyboard([
-                        [Markup.button.callback(t.delivery, "delivery_type_delivery")],
-                        [Markup.button.callback(t.pickup, "delivery_type_pickup")]
-                    ])
-                );
+
+                // Get available bakers and show assignment options
+                const bakers = await User.find({ role: "baker" });
+                if (bakers.length === 0) {
+                    orderSession.data.assignedBaker = null;
+                    orderSession.step = 7; // Skip to delivery option if no bakers
+                    await ctx.reply(
+                        t.delivery_option,
+                        Markup.inlineKeyboard([
+                            [Markup.button.callback(t.delivery, "delivery_type_delivery")],
+                            [Markup.button.callback(t.pickup, "delivery_type_pickup")]
+                        ])
+                    );
+                } else {
+                    // Create buttons for bakers
+                    const bakerButtons = bakers.map(baker =>
+                        [Markup.button.callback(`${baker.firstName} ${baker.lastName}`, `assign_baker_${baker._id}`)]
+                    );
+                    bakerButtons.push([Markup.button.callback(t.no_assignment, "assign_baker_none")]);
+
+                    await ctx.reply(
+                        t.assign_baker,
+                        Markup.inlineKeyboard(bakerButtons)
+                    );
+                }
                 break;
 
-            case 7: // Address for delivery
+            case 8: // Address for delivery (after baker assignment and delivery type selection)
                 orderSession.data.address = text;
-                orderSession.step = 8;
+                orderSession.step = 9;
                 orderSession.calendarDate = new Date();
                 await ctx.reply(t.select_date, generateCalendar(orderSession.calendarDate, ctx.from.id));
                 break;
 
-            case 10: // Special instructions (notes)
+            case 11: // Special instructions (notes) - changed from 10 to 11
                 orderSession.data.specialInstructions = text;
                 await createOrder(ctx, orderSession);
                 break;
 
             default:
                 // Handle cases where user sends text during calendar or other non-text steps
-                if (orderSession.step === 8 || orderSession.step === 9) {
-                    await ctx.reply(
-                        t.choose_date_from_calendar
-                    );
+                if (orderSession.step === 9 || orderSession.step === 10) {
+                    await ctx.reply(t.choose_date_from_calendar);
                 }
                 break;
         }
     }
 
+    bot.action(/assign_baker_(.+)/, async (ctx) => {
+        try {
+            const bakerId = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const session = sessions[ctx.from.id];
+
+            if (!session || session.step !== 6) {
+                await ctx.answerCbQuery(t.something_wrong);
+                return;
+            }
+
+            if (bakerId === 'none') {
+                session.data.assignedBaker = null;
+                await ctx.answerCbQuery(t.no_assignment);
+            } else {
+                session.data.assignedBaker = bakerId;
+                const baker = await User.findById(bakerId);
+                await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Topshirildi' : 'Назначено'} ${baker.firstName} ${baker.lastName}`);
+            }
+
+            session.step = 7; // Move to delivery option after baker assignment
+            await ctx.deleteMessage();
+            await ctx.reply(
+                t.delivery_option,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback(t.delivery, "delivery_type_delivery")],
+                    [Markup.button.callback(t.pickup, "delivery_type_pickup")]
+                ])
+            );
+
+        } catch (err) {
+            console.error("❌ Baker assignment error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            await ctx.answerCbQuery(t.something_wrong);
+        }
+    });
+
     bot.on(['photo', 'document'], async (ctx) => {
         try {
             const orderSession = sessions[ctx.from.id];
-            if (!orderSession || orderSession.step !== 9) {
+            if (!orderSession || orderSession.step !== 10) {
                 return;
             }
 
@@ -773,7 +828,7 @@ function setupBotHandlers() {
             orderSession.data.images = [{ fileId, filename }];
 
             // Move to notes step WITH SKIP BUTTON
-            orderSession.step = 10;
+            orderSession.step = 11;
             await ctx.reply(
                 t.notes_prompt,
                 Markup.inlineKeyboard([
@@ -791,7 +846,7 @@ function setupBotHandlers() {
     bot.action('skip_images', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session || session.step !== 9) {
+            if (!session || session.step !== 10) {
                 await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
@@ -800,7 +855,7 @@ function setupBotHandlers() {
             const t = translations[lang];
 
             // Skip images and move to notes WITH SKIP BUTTON
-            session.step = 10;
+            session.step = 11;
             await ctx.deleteMessage();
             await ctx.reply(
                 t.notes_prompt,
@@ -820,7 +875,7 @@ function setupBotHandlers() {
     bot.action('skip_notes', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session || session.step !== 10) {
+            if (!session || session.step !== 11) {
                 await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
@@ -867,16 +922,19 @@ function setupBotHandlers() {
             const t = translations[lang];
             const session = sessions[ctx.from.id];
 
-            if (!session || session.step !== 6) return;
+            if (!session || session.step !== 7) { // Changed from 6 to 7
+                await ctx.answerCbQuery(t.something_wrong);
+                return;
+            }
 
             session.data.deliveryType = type;
             if (type === "delivery") {
-                session.step = 7;
+                session.step = 8; // Changed from 7 to 8
                 await ctx.deleteMessage();
                 await ctx.reply(t.address_prompt);
             } else {
                 session.data.address = "";
-                session.step = 8;
+                session.step = 9; // Changed from 8 to 9
                 session.calendarDate = new Date();
                 await ctx.deleteMessage();
                 await ctx.reply(t.select_date, generateCalendar(session.calendarDate, ctx.from.id));
@@ -894,14 +952,14 @@ function setupBotHandlers() {
             const t = translations[lang];
             const session = sessions[ctx.from.id];
 
-            if (!session || session.step !== 8) {
+            if (!session || session.step !== 9) { // Changed from 8 to 9
                 await ctx.answerCbQuery(t.something_wrong);
                 return;
             }
 
             let selectedDate = dateStr === 'today' ? new Date() : new Date(dateStr);
             session.data.deliveryDate = format(selectedDate, 'yyyy-MM-dd');
-            session.step = 9; // Step 9 for images
+            session.step = 10; // Changed from 9 to 10 (images step)
 
             await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Tanlandi' : 'Выбрано'}: ${format(selectedDate, 'MMM dd, yyyy')}`);
             await ctx.deleteMessage();
