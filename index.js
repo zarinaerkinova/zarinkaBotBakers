@@ -1238,15 +1238,65 @@ function setupBotHandlers() {
             await order.save();
 
             await ctx.answerCbQuery(t.order_in_progress);
-            await ctx.editMessageReplyMarkup(Markup.inlineKeyboard([
-                [Markup.button.callback(t.complete, `complete_${order._id}`)]
-            ]));
 
-            // Notify admin about progress
+            // Build the updated message text
+            let messageText = `${t.order}${order.customerName}\n` +
+                `${t.product}${order.productName}\n` +
+                `🔢 ${lang === 'uzbek' ? 'Miqdori' : 'Количество'}: ${order.quantity}\n` +
+                `${t.delivery}${order.deliveryDate}\n` +
+                `${t.status}in_progress\n`;
+
+            // Add urgency indicator
+            const deliveryDate = new Date(order.deliveryDate);
+            const today = new Date();
+            const diffTime = deliveryDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 1) {
+                messageText += `🚨 ${lang === 'uzbek' ? 'Bugun yetkazish kerak!' : 'Нужно доставить сегодня!'}\n`;
+            } else if (diffDays <= 3) {
+                messageText += `⚠️ ${lang === 'uzbek' ? `Yetkazishga ${diffDays} kun qoldi` : `До доставки ${diffDays} дня`}\n`;
+            }
+
+            try {
+                // Try to edit the message with new buttons
+                await ctx.editMessageText(messageText, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{
+                                text: t.complete,
+                                callback_data: `complete_${order._id}`
+                            }]
+                        ]
+                    }
+                });
+            } catch (editError) {
+                console.error("Edit message error:", editError.message);
+                // If editing fails, send a new message
+                await ctx.reply(messageText, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{
+                                text: t.complete,
+                                callback_data: `complete_${order._id}`
+                            }]
+                        ]
+                    }
+                });
+                // Delete the old message
+                try {
+                    await ctx.deleteMessage();
+                } catch (deleteError) {
+                    console.error("Delete message error:", deleteError.message);
+                }
+            }
+
+            // Notify admin
             const admin = await User.findOne({ role: "admin" });
             if (admin) {
                 const adminLang = await getUserLanguage(admin.telegramId);
-                const adminT = translations[adminLang];
                 await ctx.telegram.sendMessage(
                     admin.telegramId,
                     `🔄 ${user.firstName} ${user.lastName} ${adminLang === 'uzbek' ? 'buyurtmani ishlab chiqmoqda' : 'начал выполнять заказ'}: ${order.customerName} - ${order.productName}`
