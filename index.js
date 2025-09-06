@@ -377,7 +377,6 @@ function setupBotHandlers() {
         }
     });
 
-    // Orders command
     bot.command("orders", async (ctx) => {
         try {
             const lang = await getUserLanguage(ctx.from.id);
@@ -387,7 +386,11 @@ function setupBotHandlers() {
             if (!user) return ctx.reply(t.not_registered);
 
             if (user.role === "admin") {
-                const orders = await Order.find().populate('assignedBaker', 'firstName lastName');
+                // Sort by delivery date (nearest first)
+                const orders = await Order.find()
+                    .populate('assignedBaker', 'firstName lastName')
+                    .sort({ deliveryDate: 1, createdAt: 1 }); // 1 = ascending (nearest first)
+
                 if (!orders.length) return ctx.reply(t.no_orders);
 
                 let message = t.all_orders;
@@ -401,22 +404,38 @@ function setupBotHandlers() {
                     message += `📦 ${lang === 'uzbek' ? 'Mahsulot' : 'Продукт'}: ${order.productName}\n`;
                     message += `🔢 ${lang === 'uzbek' ? 'Miqdor' : 'Количество'}: ${order.quantity}\n`;
                     message += `👨‍🍳 ${lang === 'uzbek' ? 'Qandolatchi' : 'Пекарь'}: ${bakerName}\n`;
-                    message += `${t.delivery}${order.deliveryDate}\n`;
-                    message += `${t.status}${order.status}\n`;
+                    message += `📅 ${lang === 'uzbek' ? 'Yetkazish' : 'Доставка'}: ${order.deliveryDate}\n`;
+                    message += `📊 ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${order.status}\n`;
                     message += `────────────────────\n`;
                 });
 
                 return ctx.reply(message);
             } else if (user.role === "baker") {
-                const orders = await Order.find({ assignedBaker: user._id }).populate('assignedBaker', 'firstName lastName');
+                // Sort by delivery date (nearest first) for baker's assigned orders
+                const orders = await Order.find({ assignedBaker: user._id })
+                    .populate('assignedBaker', 'firstName lastName')
+                    .sort({ deliveryDate: 1, createdAt: 1 }); // 1 = ascending (nearest first)
+
                 if (!orders.length) return ctx.reply(t.no_orders);
 
                 for (const order of orders) {
                     let message = `${t.order}${order.customerName}\n`;
                     message += `${t.product}${order.productName}\n`;
                     message += `🔢 ${lang === 'uzbek' ? 'Miqdori' : 'Количество'}: ${order.quantity}\n`;
-                    message += `${t.delivery}${order.deliveryDate}\n`;
-                    message += `${t.status}${order.status}\n`;
+                    message += `📅 ${lang === 'uzbek' ? 'Yetkazish sanasi' : 'Дата доставки'}: ${order.deliveryDate}\n`;
+                    message += `📊 ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${order.status}\n`;
+
+                    // Add urgency indicator for orders due soon
+                    const deliveryDate = new Date(order.deliveryDate);
+                    const today = new Date();
+                    const diffTime = deliveryDate - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                    if (diffDays <= 1) {
+                        message += `🚨 ${lang === 'uzbek' ? 'Bugun yetkazish kerak!' : 'Нужно доставить сегодня!'}\n`;
+                    } else if (diffDays <= 3) {
+                        message += `⚠️ ${lang === 'uzbek' ? `Yetkazishga ${diffDays} kun qoldi` : `До доставки ${diffDays} дня`}\n`;
+                    }
 
                     let buttons = [];
                     if (order.status === 'pending') {
@@ -997,7 +1016,6 @@ function setupBotHandlers() {
         }
     });
 
-    // Helper function to create order
     async function createOrder(ctx, session) {
         try {
             const lang = await getUserLanguage(ctx.from.id);
@@ -1021,6 +1039,28 @@ function setupBotHandlers() {
 
             await order.save();
             await ctx.reply(t.order_created);
+
+            // Notify the assigned baker if there is one
+            if (session.data.assignedBaker) {
+                const baker = await User.findById(session.data.assignedBaker);
+                if (baker) {
+                    const bakerLang = await getUserLanguage(baker.telegramId);
+                    const bakerT = translations[bakerLang];
+
+                    const notificationMessage = `📋 ${bakerLang === 'uzbek' ? 'Yangi buyurtma!' : 'Новый заказ!'}\n\n` +
+                        `👤 ${bakerLang === 'uzbek' ? 'Mijoz' : 'Клиент'}: ${session.data.customerName}\n` +
+                        `📦 ${bakerLang === 'uzbek' ? 'Mahsulot' : 'Продукт'}: ${session.data.productName}\n` +
+                        `🔢 ${bakerLang === 'uzbek' ? 'Miqdor' : 'Количество'}: ${session.data.quantity}\n` +
+                        `📅 ${bakerLang === 'uzbek' ? 'Yetkazish sanasi' : 'Дата доставки'}: ${session.data.deliveryDate}\n` +
+                        `🚚 ${bakerLang === 'uzbek' ? 'Turi' : 'Тип'}: ${session.data.deliveryType === 'delivery' ?
+                            (bakerLang === 'uzbek' ? 'Yetkazib berish' : 'Доставка') :
+                            (bakerLang === 'uzbek' ? 'Olib ketish' : 'Самовывоз')}\n\n` +
+                        `⚡ ${bakerLang === 'uzbek' ? 'Buyurtmalarni ko\'rish uchun' : 'Для просмотра заказов'} /orders`;
+
+                    await ctx.telegram.sendMessage(baker.telegramId, notificationMessage);
+                }
+            }
+
             delete sessions[ctx.from.id];
         } catch (err) {
             console.error("❌ Order creation error:", err.message);
@@ -1029,7 +1069,6 @@ function setupBotHandlers() {
         }
     }
 
-    // Baker accepts order
     bot.action(/accept_(.+)/, async (ctx) => {
         try {
             const orderId = ctx.match[1];
@@ -1082,14 +1121,27 @@ function setupBotHandlers() {
                 }
             });
 
-            // Notify admin about acceptance
             const admin = await User.findOne({ role: "admin" });
             if (admin) {
                 const adminLang = await getUserLanguage(admin.telegramId);
                 const adminT = translations[adminLang];
+
+                const deliveryDate = new Date(order.deliveryDate);
+                const today = new Date();
+                const diffTime = deliveryDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                let urgencyInfo = '';
+                if (diffDays <= 1) {
+                    urgencyInfo = adminLang === 'uzbek' ? ' (Bugun yetkazish kerak!)' : ' (Нужно доставить сегодня!)';
+                } else if (diffDays <= 3) {
+                    urgencyInfo = adminLang === 'uzbek' ? ` (${diffDays} kun qoldi)` : ` (${diffDays} дня осталось)`;
+                }
+
                 await ctx.telegram.sendMessage(
                     admin.telegramId,
-                    `👨‍🍳 ${user.firstName} ${user.lastName} ${adminLang === 'uzbek' ? 'buyurtmani qabul qildi' : 'принял заказ'}: ${order.customerName} - ${order.productName}`
+                    `👨‍🍳 ${user.firstName} ${user.lastName} ${adminLang === 'uzbek' ? 'buyurtmani qabul qildi' : 'принял заказ'}: ` +
+                    `${order.customerName} - ${order.productName}${urgencyInfo}`
                 );
             }
 
