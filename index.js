@@ -210,6 +210,7 @@ async function setCommandsForUser(ctx, role) {
             await ctx.telegram.setMyCommands([
                 { command: "neworder", description: lang === 'uzbek' ? "Yangi buyurtma qo'shish" : "Добавить новый заказ" },
                 { command: "orders", description: lang === 'uzbek' ? "Barcha buyurtmalarni ko'rish" : "Просмотреть все заказы" },
+                { command: "doneorders", description: lang === 'uzbek' ? "Tugatilgan buyurtmalar" : "Завершенные заказы" },
                 { command: "bakers", description: lang === 'uzbek' ? "Barcha Qandolatchilarni ro'yxati" : "Список всех пекарей" },
                 { command: "language", description: lang === 'uzbek' ? "Tilni o'zgartirish" : "Изменить язык" },
                 { command: "logout", description: lang === 'uzbek' ? "Chiqish" : "Выйти" },
@@ -217,6 +218,7 @@ async function setCommandsForUser(ctx, role) {
         } else if (role === "baker") {
             await ctx.telegram.setMyCommands([
                 { command: "orders", description: lang === 'uzbek' ? "Menga topshirilgan buyurtmalar" : "Просмотреть мои заказы" },
+                { command: "doneorders", description: lang === 'uzbek' ? "Mening tugatilgan buyurtmalarim" : "Мои завершенные заказы" },
                 { command: "language", description: lang === 'uzbek' ? "Tilni o'zgartirish" : "Изменить язык" },
                 { command: "logout", description: lang === 'uzbek' ? "Chiqish" : "Выйти" },
             ], { scope: { type: "chat", chat_id: ctx.chat.id } });
@@ -697,16 +699,10 @@ function setupBotHandlers() {
                 }
                 orderSession.data.quantity = parseInt(text);
                 orderSession.step = 4;
-                await ctx.reply(
-                    t.cake_size_prompt,
-                    Markup.inlineKeyboard([
-                        [Markup.button.callback(t.size_12, "cake_size_12")],
-                        [Markup.button.callback(t.size_8, "cake_size_8")]
-                    ])
-                );
+                await ctx.reply(t.price_prompt);
                 break;
 
-            case 5: // Price (after cake size selection)
+            case 4: // Price
                 if (isNaN(text) || parseInt(text) <= 0) {
                     await ctx.reply(lang === 'uzbek'
                         ? "❌ Iltimos, narx uchun haqiqiy raqam kiriting:"
@@ -714,13 +710,13 @@ function setupBotHandlers() {
                     return;
                 }
                 orderSession.data.price = parseInt(text);
-                orderSession.step = 6;
+                orderSession.step = 5;
 
                 // Get available bakers and show assignment options
                 const bakers = await User.find({ role: "baker" });
                 if (bakers.length === 0) {
                     orderSession.data.assignedBaker = null;
-                    orderSession.step = 7; // Skip to delivery option if no bakers
+                    orderSession.step = 6; // Skip to delivery option if no bakers
                     await ctx.reply(
                         t.delivery_option,
                         Markup.inlineKeyboard([
@@ -742,21 +738,21 @@ function setupBotHandlers() {
                 }
                 break;
 
-            case 8: // Address for delivery (after baker assignment and delivery type selection)
+            case 7: // Address for delivery (after delivery type selection)
                 orderSession.data.address = text;
-                orderSession.step = 9;
+                orderSession.step = 8;
                 orderSession.calendarDate = new Date();
                 await ctx.reply(t.select_date, generateCalendar(orderSession.calendarDate, ctx.from.id));
                 break;
 
-            case 11: // Special instructions (notes) - changed from 10 to 11
+            case 10: // Special instructions (notes)
                 orderSession.data.specialInstructions = text;
                 await createOrder(ctx, orderSession);
                 break;
 
             default:
-                // Handle cases where user sends text during calendar or other non-text steps
-                if (orderSession.step === 9 || orderSession.step === 10) {
+                // Handle cases where user sends text during non-text steps
+                if (orderSession.step === 8 || orderSession.step === 9) {
                     await ctx.reply(t.choose_date_from_calendar);
                 }
                 break;
@@ -770,7 +766,7 @@ function setupBotHandlers() {
             const t = translations[lang];
             const session = sessions[ctx.from.id];
 
-            if (!session || session.step !== 6) {
+            if (!session || session.step !== 5) {
                 await ctx.answerCbQuery(t.something_wrong);
                 return;
             }
@@ -784,7 +780,7 @@ function setupBotHandlers() {
                 await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Topshirildi' : 'Назначено'} ${baker.firstName} ${baker.lastName}`);
             }
 
-            session.step = 7; // Move to delivery option after baker assignment
+            session.step = 6; // Move to delivery option after baker assignment
             await ctx.deleteMessage();
             await ctx.reply(
                 t.delivery_option,
@@ -865,7 +861,7 @@ function setupBotHandlers() {
     bot.action('skip_images', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session || session.step !== 10) {
+            if (!session || session.step !== 9) {
                 await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
@@ -874,7 +870,7 @@ function setupBotHandlers() {
             const t = translations[lang];
 
             // Skip images and move to notes WITH SKIP BUTTON
-            session.step = 11;
+            session.step = 10;
             await ctx.deleteMessage();
             await ctx.reply(
                 t.notes_prompt,
@@ -894,7 +890,7 @@ function setupBotHandlers() {
     bot.action('skip_notes', async (ctx) => {
         try {
             const session = sessions[ctx.from.id];
-            if (!session || session.step !== 11) {
+            if (!session || session.step !== 10) {
                 await ctx.answerCbQuery("⚠️ Session expired.");
                 return;
             }
@@ -914,25 +910,25 @@ function setupBotHandlers() {
         }
     });
 
-    bot.action(/cake_size_(.+)/, async (ctx) => {
-        try {
-            const size = ctx.match[1];
-            const lang = await getUserLanguage(ctx.from.id);
-            const t = translations[lang];
-            const session = sessions[ctx.from.id];
+    // bot.action(/cake_size_(.+)/, async (ctx) => {
+    //     try {
+    //         const size = ctx.match[1];
+    //         const lang = await getUserLanguage(ctx.from.id);
+    //         const t = translations[lang];
+    //         const session = sessions[ctx.from.id];
 
-            if (!session || session.step !== 4) return;
+    //         if (!session || session.step !== 4) return;
 
-            session.data.cakeSize = size === "12" ? t.size_12 : t.size_8;
-            session.step = 5; // Now step 5 is for price (after cake size)
-            await ctx.deleteMessage();
-            await ctx.reply(t.price_prompt); // Ask for price after size selection
+    //         session.data.cakeSize = size === "12" ? t.size_12 : t.size_8;
+    //         session.step = 5; // Now step 5 is for price (after cake size)
+    //         await ctx.deleteMessage();
+    //         await ctx.reply(t.price_prompt); // Ask for price after size selection
 
-        } catch (err) {
-            console.error("❌ Cake size error:", err.message);
-            await ctx.answerCbQuery("⚠️ Error");
-        }
-    });
+    //     } catch (err) {
+    //         console.error("❌ Cake size error:", err.message);
+    //         await ctx.answerCbQuery("⚠️ Error");
+    //     }
+    // });
 
     bot.action(/delivery_type_(.+)/, async (ctx) => {
         try {
@@ -941,19 +937,19 @@ function setupBotHandlers() {
             const t = translations[lang];
             const session = sessions[ctx.from.id];
 
-            if (!session || session.step !== 7) { // Changed from 6 to 7
+            if (!session || session.step !== 6) {
                 await ctx.answerCbQuery(t.something_wrong);
                 return;
             }
 
             session.data.deliveryType = type;
             if (type === "delivery") {
-                session.step = 8; // Changed from 7 to 8
+                session.step = 7; // Ask for address
                 await ctx.deleteMessage();
                 await ctx.reply(t.address_prompt);
             } else {
                 session.data.address = "";
-                session.step = 9; // Changed from 8 to 9
+                session.step = 8; // Go to calendar
                 session.calendarDate = new Date();
                 await ctx.deleteMessage();
                 await ctx.reply(t.select_date, generateCalendar(session.calendarDate, ctx.from.id));
@@ -971,14 +967,14 @@ function setupBotHandlers() {
             const t = translations[lang];
             const session = sessions[ctx.from.id];
 
-            if (!session || session.step !== 9) { // Changed from 8 to 9
+            if (!session || session.step !== 8) {
                 await ctx.answerCbQuery(t.something_wrong);
                 return;
             }
 
             let selectedDate = dateStr === 'today' ? new Date() : new Date(dateStr);
             session.data.deliveryDate = format(selectedDate, 'yyyy-MM-dd');
-            session.step = 10; // Changed from 9 to 10 (images step)
+            session.step = 9; // Move to images step
 
             await ctx.answerCbQuery(`${lang === 'uzbek' ? 'Tanlandi' : 'Выбрано'}: ${format(selectedDate, 'MMM dd, yyyy')}`);
             await ctx.deleteMessage();
@@ -1362,6 +1358,126 @@ function setupBotHandlers() {
             await ctx.answerCbQuery(translations[lang].something_wrong);
         }
     });
+
+    // Done orders command - view completed orders
+    bot.command("doneorders", async (ctx) => {
+        try {
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const user = await User.findOne({ telegramId: String(ctx.from.id) });
+
+            if (!user) return ctx.reply(t.not_registered);
+
+            let orders;
+            let title;
+
+            if (user.role === "admin") {
+                // Admin sees all completed orders, sorted by completion date (newest first)
+                orders = await Order.find({ status: 'completed' })
+                    .populate('assignedBaker', 'firstName lastName')
+                    .populate('createdBy', 'firstName lastName')
+                    .sort({ updatedAt: -1 }); // Newest completed first
+
+                title = lang === 'uzbek' ? '✅ Barcha tugatilgan buyurtmalar:\n\n' : '✅ Все завершенные заказы:\n\n';
+            } else if (user.role === "baker") {
+                // Baker sees only their completed orders, sorted by completion date
+                orders = await Order.find({
+                    status: 'completed',
+                    assignedBaker: user._id
+                })
+                    .populate('assignedBaker', 'firstName lastName')
+                    .populate('createdBy', 'firstName lastName')
+                    .sort({ updatedAt: -1 }); // Newest completed first
+
+                title = lang === 'uzbek' ? '✅ Mening tugatilgan buyurtmalarim:\n\n' : '✅ Мои завершенные заказы:\n\n';
+            } else {
+                return ctx.reply(t.not_registered);
+            }
+
+            if (!orders.length) {
+                const noOrdersMsg = lang === 'uzbek'
+                    ? '📭 Hali tugatilgan buyurtmalar mavjud emas.'
+                    : '📭 Завершенных заказов пока нет.';
+                return ctx.reply(noOrdersMsg);
+            }
+
+            // Send orders in chunks to avoid message length limits
+            let message = title;
+            const chunkSize = 5; // Number of orders per message
+
+            for (let i = 0; i < orders.length; i++) {
+                const order = orders[i];
+                const bakerName = order.assignedBaker
+                    ? `${order.assignedBaker.firstName} ${order.assignedBaker.lastName}`
+                    : t.no_assignment;
+
+                const createdByName = order.createdBy
+                    ? `${order.createdBy.firstName} ${order.createdBy.lastName}`
+                    : lang === 'uzbek' ? 'Noma\'lum' : 'Неизвестно';
+
+                const completionDate = order.updatedAt ? format(new Date(order.updatedAt), 'yyyy-MM-dd HH:mm') : 'N/A';
+
+                message += `🆔 ${i + 1}\n`;
+                message += `👤 ${lang === 'uzbek' ? 'Mijoz' : 'Клиент'}: ${order.customerName}\n`;
+                message += `📦 ${lang === 'uzbek' ? 'Mahsulot' : 'Продукт'}: ${order.productName}\n`;
+                message += `🔢 ${lang === 'uzbek' ? 'Miqdor' : 'Количество'}: ${order.quantity}\n`;
+
+                if (order.cakeSize) {
+                    message += `🎂 ${lang === 'uzbek' ? 'O\'lcham' : 'Размер'}: ${order.cakeSize}\n`;
+                }
+
+                if (order.price) {
+                    message += `💰 ${lang === 'uzbek' ? 'Narx' : 'Цена'}: ${order.price}\n`;
+                }
+
+                message += `👨‍🍳 ${lang === 'uzbek' ? 'Qandolatchi' : 'Пекарь'}: ${bakerName}\n`;
+                message += `👤 ${lang === 'uzbek' ? 'Yaratgan' : 'Создал'}: ${createdByName}\n`;
+                message += `📅 ${lang === 'uzbek' ? 'Yetkazish sanasi' : 'Дата доставки'}: ${order.deliveryDate}\n`;
+                message += `✅ ${lang === 'uzbek' ? 'Tugatilgan sana' : 'Дата завершения'}: ${completionDate}\n`;
+
+                if (order.deliveryType) {
+                    const deliveryTypeText = order.deliveryType === 'delivery'
+                        ? (lang === 'uzbek' ? 'Yetkazib berish' : 'Доставка')
+                        : (lang === 'uzbek' ? 'Olib ketish' : 'Самовывоз');
+                    message += `🚚 ${lang === 'uzbek' ? 'Turi' : 'Тип'}: ${deliveryTypeText}\n`;
+                }
+
+                if (order.address) {
+                    message += `📍 ${lang === 'uzbek' ? 'Manzil' : 'Адрес'}: ${order.address}\n`;
+                }
+
+                if (order.specialInstructions) {
+                    message += `💬 ${lang === 'uzbek' ? 'Ko\'rsatmalar' : 'Инструкции'}: ${order.specialInstructions}\n`;
+                }
+
+                message += `────────────────────\n\n`;
+
+                // Send message when chunk size is reached or at the end
+                if ((i + 1) % chunkSize === 0 || i === orders.length - 1) {
+                    await ctx.reply(message);
+                    message = ''; // Reset for next chunk
+
+                    // Small delay between messages to avoid rate limiting
+                    if (i < orders.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+            }
+
+            // Add summary
+            const summaryMsg = lang === 'uzbek'
+                ? `\n📊 Jami: ${orders.length} ta tugatilgan buyurtma`
+                : `\n📊 Всего: ${orders.length} завершенных заказов`;
+
+            await ctx.reply(summaryMsg);
+
+        } catch (err) {
+            console.error("❌ Done orders command error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.reply(translations[lang].something_wrong);
+        }
+    });
+
     // Noop handler
     bot.action('noop', async (ctx) => {
         await ctx.answerCbQuery();
