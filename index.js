@@ -1029,6 +1029,226 @@ function setupBotHandlers() {
         }
     }
 
+    // Add these action handlers after your existing action handlers
+
+    // Baker accepts order
+    bot.action(/accept_(.+)/, async (ctx) => {
+        try {
+            const orderId = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const user = await User.findOne({ telegramId: String(ctx.from.id) });
+
+            if (!user || user.role !== "baker") {
+                await ctx.answerCbQuery(t.only_bakers_accept);
+                return;
+            }
+
+            const order = await Order.findById(orderId).populate('assignedBaker');
+            if (!order) {
+                await ctx.answerCbQuery(t.order_not_found);
+                return;
+            }
+
+            // Check if order is assigned to this baker
+            if (!order.assignedBaker || order.assignedBaker.telegramId !== String(ctx.from.id)) {
+                await ctx.answerCbQuery(t.not_assigned_to_you);
+                return;
+            }
+
+            if (order.status !== 'pending') {
+                await ctx.answerCbQuery(`${t.order_already_status}${order.status}`);
+                return;
+            }
+
+            order.status = 'accepted';
+            await order.save();
+
+            await ctx.answerCbQuery(t.order_accepted);
+            await ctx.editMessageReplyMarkup(Markup.inlineKeyboard([
+                [Markup.button.callback(t.in_progress, `progress_${order._id}`),
+                Markup.button.callback(t.complete, `complete_${order._id}`)]
+            ]));
+
+            // Notify admin about acceptance
+            const admin = await User.findOne({ role: "admin" });
+            if (admin) {
+                const adminLang = await getUserLanguage(admin.telegramId);
+                const adminT = translations[adminLang];
+                await ctx.telegram.sendMessage(
+                    admin.telegramId,
+                    `👨‍🍳 ${user.firstName} ${user.lastName} ${adminLang === 'uzbek' ? 'buyurtmani qabul qildi' : 'принял заказ'}: ${order.customerName} - ${order.productName}`
+                );
+            }
+
+        } catch (err) {
+            console.error("❌ Accept order error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.answerCbQuery(translations[lang].something_wrong);
+        }
+    });
+
+    // Baker rejects order
+    bot.action(/reject_(.+)/, async (ctx) => {
+        try {
+            const orderId = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const user = await User.findOne({ telegramId: String(ctx.from.id) });
+
+            if (!user || user.role !== "baker") {
+                await ctx.answerCbQuery(t.only_bakers_accept);
+                return;
+            }
+
+            const order = await Order.findById(orderId).populate('assignedBaker');
+            if (!order) {
+                await ctx.answerCbQuery(t.order_not_found);
+                return;
+            }
+
+            if (!order.assignedBaker || order.assignedBaker.telegramId !== String(ctx.from.id)) {
+                await ctx.answerCbQuery(t.not_assigned_to_you);
+                return;
+            }
+
+            if (order.status !== 'pending') {
+                await ctx.answerCbQuery(`${t.order_already_status}${order.status}`);
+                return;
+            }
+
+            order.status = 'rejected';
+            await order.save();
+
+            await ctx.answerCbQuery(t.order_rejected);
+            await ctx.deleteMessage();
+
+            // Notify admin about rejection
+            const admin = await User.findOne({ role: "admin" });
+            if (admin) {
+                const adminLang = await getUserLanguage(admin.telegramId);
+                const adminT = translations[adminLang];
+                await ctx.telegram.sendMessage(
+                    admin.telegramId,
+                    `❌ ${user.firstName} ${user.lastName} ${adminLang === 'uzbek' ? 'buyurtmani rad etdi' : 'отклонил заказ'}: ${order.customerName} - ${order.productName}`
+                );
+            }
+
+        } catch (err) {
+            console.error("❌ Reject order error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.answerCbQuery(translations[lang].something_wrong);
+        }
+    });
+
+    // Baker marks order as in progress
+    bot.action(/progress_(.+)/, async (ctx) => {
+        try {
+            const orderId = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const user = await User.findOne({ telegramId: String(ctx.from.id) });
+
+            if (!user || user.role !== "baker") {
+                await ctx.answerCbQuery(t.only_bakers_accept);
+                return;
+            }
+
+            const order = await Order.findById(orderId).populate('assignedBaker');
+            if (!order) {
+                await ctx.answerCbQuery(t.order_not_found);
+                return;
+            }
+
+            if (!order.assignedBaker || order.assignedBaker.telegramId !== String(ctx.from.id)) {
+                await ctx.answerCbQuery(t.not_assigned_to_you);
+                return;
+            }
+
+            if (order.status !== 'accepted') {
+                await ctx.answerCbQuery(`${t.must_be_accepted}${order.status}`);
+                return;
+            }
+
+            order.status = 'in_progress';
+            await order.save();
+
+            await ctx.answerCbQuery(t.order_in_progress);
+            await ctx.editMessageReplyMarkup(Markup.inlineKeyboard([
+                [Markup.button.callback(t.complete, `complete_${order._id}`)]
+            ]));
+
+            // Notify admin about progress
+            const admin = await User.findOne({ role: "admin" });
+            if (admin) {
+                const adminLang = await getUserLanguage(admin.telegramId);
+                const adminT = translations[adminLang];
+                await ctx.telegram.sendMessage(
+                    admin.telegramId,
+                    `🔄 ${user.firstName} ${user.lastName} ${adminLang === 'uzbek' ? 'buyurtmani ishlab chiqmoqda' : 'начал выполнять заказ'}: ${order.customerName} - ${order.productName}`
+                );
+            }
+
+        } catch (err) {
+            console.error("❌ Progress order error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.answerCbQuery(translations[lang].something_wrong);
+        }
+    });
+
+    // Baker marks order as complete
+    bot.action(/complete_(.+)/, async (ctx) => {
+        try {
+            const orderId = ctx.match[1];
+            const lang = await getUserLanguage(ctx.from.id);
+            const t = translations[lang];
+            const user = await User.findOne({ telegramId: String(ctx.from.id) });
+
+            if (!user || user.role !== "baker") {
+                await ctx.answerCbQuery(t.only_bakers_accept);
+                return;
+            }
+
+            const order = await Order.findById(orderId).populate('assignedBaker');
+            if (!order) {
+                await ctx.answerCbQuery(t.order_not_found);
+                return;
+            }
+
+            if (!order.assignedBaker || order.assignedBaker.telegramId !== String(ctx.from.id)) {
+                await ctx.answerCbQuery(t.not_assigned_to_you);
+                return;
+            }
+
+            if (order.status !== 'in_progress') {
+                await ctx.answerCbQuery(`${t.must_be_in_progress}${order.status}`);
+                return;
+            }
+
+            order.status = 'completed';
+            await order.save();
+
+            await ctx.answerCbQuery(t.order_completed);
+            await ctx.deleteMessage();
+
+            // Notify admin about completion
+            const admin = await User.findOne({ role: "admin" });
+            if (admin) {
+                const adminLang = await getUserLanguage(admin.telegramId);
+                const adminT = translations[adminLang];
+                await ctx.telegram.sendMessage(
+                    admin.telegramId,
+                    `✅ ${user.firstName} ${user.lastName} ${adminLang === 'uzbek' ? 'buyurtmani tugatdi' : 'завершил заказ'}: ${order.customerName} - ${order.productName}`
+                );
+            }
+
+        } catch (err) {
+            console.error("❌ Complete order error:", err.message);
+            const lang = await getUserLanguage(ctx.from.id);
+            await ctx.answerCbQuery(translations[lang].something_wrong);
+        }
+    });
+
     // Noop handler
     bot.action('noop', async (ctx) => {
         await ctx.answerCbQuery();
