@@ -1312,7 +1312,6 @@ function setupBotHandlers() {
             await ctx.answerCbQuery(translations[lang].something_wrong);
         }
     });
-
     // Noop handler
     bot.action('noop', async (ctx) => {
         await ctx.answerCbQuery();
