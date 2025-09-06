@@ -1029,8 +1029,6 @@ function setupBotHandlers() {
         }
     }
 
-    // Add these action handlers after your existing action handlers
-
     // Baker accepts order
     bot.action(/accept_(.+)/, async (ctx) => {
         try {
@@ -1065,10 +1063,24 @@ function setupBotHandlers() {
             await order.save();
 
             await ctx.answerCbQuery(t.order_accepted);
-            await ctx.editMessageReplyMarkup(Markup.inlineKeyboard([
-                [Markup.button.callback(t.in_progress, `progress_${order._id}`),
-                Markup.button.callback(t.complete, `complete_${order._id}`)]
-            ]));
+
+            // Update the message with new buttons
+            const messageText = `${t.order}${order.customerName}\n` +
+                `${t.product}${order.productName}\n` +
+                `🔢 ${lang === 'uzbek' ? 'Miqdori' : 'Количество'}: ${order.quantity}\n` +
+                `${t.delivery}${order.deliveryDate}\n` +
+                `${t.status}accepted\n`;
+
+            await ctx.editMessageText(messageText, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            Markup.button.callback(t.in_progress, `progress_${order._id}`),
+                            Markup.button.callback(t.complete, `complete_${order._id}`)
+                        ]
+                    ]
+                }
+            });
 
             // Notify admin about acceptance
             const admin = await User.findOne({ role: "admin" });
