@@ -285,6 +285,20 @@ function generateCalendar(date, userId) {
     return Markup.inlineKeyboard(calendar);
 }
 
+function normalizePhoneNumber(phone) {
+    if (!phone) return '';
+
+    let normalized = phone.replace(/[^\d+]/g, '');
+
+    if (normalized.startsWith('998') && !normalized.startsWith('+998')) {
+        normalized = '+' + normalized;
+    } else if (normalized.startsWith('8') || normalized.startsWith('9')) {
+        normalized = '+998' + normalized.replace(/^8/, '').replace(/^9/, '');
+    }
+
+    return normalized;
+}
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
@@ -567,35 +581,84 @@ function setupBotHandlers() {
     bot.on("contact", async (ctx) => {
         try {
             const lang = await getUserLanguage(ctx.from.id);
-            const t = translations[lang];
             const session = regSessions[ctx.from.id];
 
             if (!session || session.step !== "phone") return;
 
-            const phone = ctx.message.contact.phone_number;
-            const existingUser = await User.findOne({ phone });
+            const rawPhone = ctx.message.contact.phone_number;
+            const normalizedPhone = normalizePhoneNumber(rawPhone);
+
+            console.log("Raw phone:", rawPhone, "Normalized:", normalizedPhone); // Debug
+
+            // Find user by any possible phone format
+            const existingUser = await User.findOne({
+                $or: [
+                    { phone: normalizedPhone },
+                    { phone: rawPhone },
+                    { phone: rawPhone.replace('+', '') },
+                    { phone: rawPhone.replace(/[\s\-()]/g, '') }
+                ]
+            });
 
             if (existingUser) {
                 const userT = translations[await getUserLanguage(ctx.from.id)];
-                await ctx.reply(`${userT.welcome_back}${existingUser.firstName} ${existingUser.lastName}!${userT.logged_in_as}${existingUser.role}${userT.role}`);
+
+                // Normalize the existing user's phone number
+                if (existingUser.phone !== normalizedPhone) {
+                    existingUser.phone = normalizedPhone;
+                }
+
                 existingUser.telegramId = String(ctx.from.id);
                 await existingUser.save();
+
+                if (loggedOutUsers[ctx.from.id]) {
+                    delete loggedOutUsers[ctx.from.id];
+                }
+
+                await ctx.reply(`${userT.welcome_back}${existingUser.firstName} ${existingUser.lastName}!${userT.logged_in_as}${existingUser.role}${userT.role}`);
                 await setCommandsForUser(ctx, existingUser.role);
                 delete regSessions[ctx.from.id];
                 await ctx.reply(userT.login_successful, Markup.removeKeyboard());
                 return;
             }
 
-            session.phone = phone;
+            // New user registration
+            session.phone = normalizedPhone;
             session.step = "first_name";
+            const t = translations[lang];
             await ctx.reply(t.registration_started, Markup.removeKeyboard());
             await ctx.reply(t.first_name_prompt);
         } catch (err) {
-            console.error("❌ Registration error:", err.message);
+            console.error("❌ Contact handler error:", err.message);
             const lang = await getUserLanguage(ctx.from.id);
-            await ctx.reply(translations[lang].registration_failed);
+            const t = translations[lang];
+            await ctx.reply(t.registration_failed);
+            delete regSessions[ctx.from.id];
         }
     });
+
+    async function migratePhoneNumbers() {
+        try {
+            const users = await User.find({});
+            let updatedCount = 0;
+
+            for (const user of users) {
+                const oldPhone = user.phone;
+                const newPhone = normalizePhoneNumber(oldPhone);
+
+                if (oldPhone !== newPhone) {
+                    user.phone = newPhone;
+                    await user.save();
+                    updatedCount++;
+                    console.log(`Updated phone: ${oldPhone} -> ${newPhone}`);
+                }
+            }
+
+            console.log(`✅ Migrated ${updatedCount} phone numbers`);
+        } catch (err) {
+            console.error("❌ Phone number migration error:", err.message);
+        }
+    }
 
     bot.on("text", async (ctx) => {
         const text = ctx.message.text;
