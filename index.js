@@ -401,76 +401,90 @@ function setupBotHandlers() {
 
             if (!user) return ctx.reply(t.not_registered);
 
+            // === ADMIN VIEW ===
             if (user.role === "admin") {
-                // Sort by delivery date (nearest first)
                 const orders = await Order.find()
-                    .populate('assignedBaker', 'firstName lastName')
-                    .sort({ deliveryDate: 1, createdAt: 1 }); // 1 = ascending (nearest first)
+                    .populate("assignedBaker", "firstName lastName")
+                    .sort({ deliveryDate: 1, createdAt: 1 });
 
                 if (!orders.length) return ctx.reply(t.no_orders);
 
-                let message = t.all_orders;
-                orders.forEach((order, index) => {
-                    const bakerName = order.assignedBaker ?
-                        `${order.assignedBaker.firstName} ${order.assignedBaker.lastName}` :
-                        t.no_assignment;
+                for (const [index, order] of orders.entries()) {
+                    const bakerName = order.assignedBaker
+                        ? `${order.assignedBaker.firstName} ${order.assignedBaker.lastName}`
+                        : t.no_assignment;
 
-                    message += `🆔 ${lang === 'uzbek' ? 'Buyurtma' : 'Заказ'} ${index + 1}\n`;
-                    message += `👤 ${lang === 'uzbek' ? 'Mijoz' : 'Клиент'}: ${order.customerName}\n`;
-                    message += `📦 ${lang === 'uzbek' ? 'Mahsulot' : 'Продукт'}: ${order.productName}\n`;
-                    message += `🔢 ${lang === 'uzbek' ? 'Miqdor' : 'Количество'}: ${order.quantity}\n`;
-                    message += `👨‍🍳 ${lang === 'uzbek' ? 'Qandolatchi' : 'Пекарь'}: ${bakerName}\n`;
-                    message += `📅 ${lang === 'uzbek' ? 'Yetkazish' : 'Доставка'}: ${order.deliveryDate}\n`;
-                    message += `📊 ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${order.status}\n`;
+                    let message = `🆔 ${lang === "uzbek" ? "Buyurtma" : "Заказ"} ${index + 1}\n`;
+                    message += `👤 ${lang === "uzbek" ? "Mijoz" : "Клиент"}: ${order.customerName}\n`;
+                    message += `📦 ${lang === "uzbek" ? "Mahsulot" : "Продукт"}: ${order.productName}\n`;
+                    message += `🔢 ${lang === "uzbek" ? "Miqdor" : "Количество"}: ${order.quantity}\n`;
+                    message += `👨‍🍳 ${lang === "uzbek" ? "Qandolatchi" : "Пекарь"}: ${bakerName}\n`;
+                    message += `📅 ${lang === "uzbek" ? "Yetkazish" : "Доставка"}: ${order.deliveryDate}\n`;
+                    message += `📍 ${lang === "uzbek" ? "Manzil" : "Адрес"}: ${order.address || t.no_address}\n`;
+                    message += `📝 ${lang === "uzbek" ? "Izoh" : "Заметки"}: ${order.notes || t.no_notes}\n`;
+                    message += `📊 ${lang === "uzbek" ? "Holati" : "Статус"}: ${order.status}\n`;
                     message += `────────────────────\n`;
-                });
 
-                return ctx.reply(message);
-            } else if (user.role === "baker") {
-                // Sort by delivery date (nearest first) for baker's assigned orders
+                    if (order.image) {
+                        await ctx.replyWithPhoto(order.image, { caption: message });
+                    } else {
+                        await ctx.reply(message);
+                    }
+                }
+            }
+
+            // === BAKER VIEW ===
+            else if (user.role === "baker") {
                 const orders = await Order.find({ assignedBaker: user._id })
-                    .populate('assignedBaker', 'firstName lastName')
-                    .sort({ deliveryDate: 1, createdAt: 1 }); // 1 = ascending (nearest first)
+                    .populate("assignedBaker", "firstName lastName")
+                    .sort({ deliveryDate: 1, createdAt: 1 });
 
                 if (!orders.length) return ctx.reply(t.no_orders);
 
                 for (const order of orders) {
                     let message = `${t.order}${order.customerName}\n`;
                     message += `${t.product}${order.productName}\n`;
-                    message += `🔢 ${lang === 'uzbek' ? 'Miqdori' : 'Количество'}: ${order.quantity}\n`;
-                    message += `📅 ${lang === 'uzbek' ? 'Yetkazish sanasi' : 'Дата доставки'}: ${order.deliveryDate}\n`;
-                    message += `📊 ${lang === 'uzbek' ? 'Holati' : 'Статус'}: ${order.status}\n`;
+                    message += `🔢 ${lang === "uzbek" ? "Miqdori" : "Количество"}: ${order.quantity}\n`;
+                    message += `📅 ${lang === "uzbek" ? "Yetkazish sanasi" : "Дата доставки"}: ${order.deliveryDate}\n`;
+                    message += `📍 ${lang === "uzbek" ? "Manzili" : "Адрес"}: ${order.address || t.no_address}\n`;
+                    message += `📝 ${lang === "uzbek" ? "Izoh" : "Заметки"}: ${order.notes || t.no_notes}\n`;
+                    message += `📊 ${lang === "uzbek" ? "Holati" : "Статус"}: ${order.status}\n`;
 
-                    // Add urgency indicator for orders due soon
+                    // Urgency indicators
                     const deliveryDate = new Date(order.deliveryDate);
                     const today = new Date();
                     const diffTime = deliveryDate - today;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                     if (diffDays <= 1) {
-                        message += `🚨 ${lang === 'uzbek' ? 'Bugun yetkazish kerak!' : 'Нужно доставить сегодня!'}\n`;
+                        message += `🚨 ${lang === "uzbek" ? "Bugun yetkazish kerak!" : "Нужно доставить сегодня!"}\n`;
                     } else if (diffDays <= 3) {
-                        message += `⚠️ ${lang === 'uzbek' ? `Yetkazishga ${diffDays} kun qoldi` : `До доставки ${diffDays} дня`}\n`;
+                        message += `⚠️ ${lang === "uzbek" ? `Yetkazishga ${diffDays} kun qoldi` : `До доставки ${diffDays} дня`}\n`;
                     }
 
+                    // Buttons based on status
                     let buttons = [];
-                    if (order.status === 'pending') {
+                    if (order.status === "pending") {
                         buttons = [
                             [Markup.button.callback(t.accept, `accept_${order._id}`),
                             Markup.button.callback(t.reject, `reject_${order._id}`)]
                         ];
-                    } else if (order.status === 'accepted') {
+                    } else if (order.status === "accepted") {
                         buttons = [
                             [Markup.button.callback(t.in_progress, `progress_${order._id}`),
                             Markup.button.callback(t.complete, `complete_${order._id}`)]
                         ];
-                    } else if (order.status === 'in_progress') {
+                    } else if (order.status === "in_progress") {
                         buttons = [
                             [Markup.button.callback(t.complete, `complete_${order._id}`)]
                         ];
                     }
 
-                    await ctx.reply(message, Markup.inlineKeyboard(buttons));
+                    if (order.image) {
+                        await ctx.replyWithPhoto(order.image, { caption: message, reply_markup: Markup.inlineKeyboard(buttons) });
+                    } else {
+                        await ctx.reply(message, Markup.inlineKeyboard(buttons));
+                    }
                 }
             }
         } catch (err) {
@@ -668,30 +682,30 @@ function setupBotHandlers() {
             const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
-            // Check if it's the contact share button text
+            // Ignore contact share button text
             if (text.includes("Share Phone") || text.includes("📱")) {
                 console.log("Ignoring contact share button text");
                 return;
             }
 
-            // Check registration session first
+            // Registration flow
             const regSession = regSessions[ctx.from.id];
             if (regSession) {
                 await handleRegistrationText(ctx, text, regSession, t);
                 return;
             }
 
-            // Check order session
+            // Order flow
             const orderSession = sessions[ctx.from.id];
             if (orderSession && orderSession.step) {
-                // Handle notes input (step 10)
+                // Handle notes (step 11)
                 if (orderSession.step === 11) {
                     orderSession.data.specialInstructions = text;
                     await createOrder(ctx, orderSession);
                     return;
                 }
 
-                // Handle other order steps
+                // Handle all other order steps
                 await handleOrderText(ctx, text, orderSession, t, lang);
                 return;
             }
@@ -871,7 +885,7 @@ function setupBotHandlers() {
             const lang = await getUserLanguage(ctx.from.id);
             const t = translations[lang];
 
-            // Reject albums (multiple images)
+            // Reject albums (multiple images at once)
             if (ctx.message.media_group_id) {
                 if (rejectedMediaGroups.has(ctx.message.media_group_id)) {
                     return;
@@ -892,20 +906,22 @@ function setupBotHandlers() {
                 fileId = ctx.message.document.file_id;
                 filename = ctx.message.document.file_name || `image_${Date.now()}`;
             } else {
-                return;
+                return ctx.reply(lang === "uzbek"
+                    ? "Faqat rasm yuborishingiz mumkin ❗️"
+                    : "Only images are allowed ❗️");
             }
 
-            // Reject if an image already exists in session
+            // Reject if an image already exists
             if (orderSession.data.images && orderSession.data.images.length > 0) {
                 return ctx.reply(lang === "uzbek"
                     ? "Siz faqat bitta rasm yuborishingiz mumkin ❗️"
                     : "You can only upload one image ❗️");
             }
 
-            // Save the single image
+            // Save the image in session
             orderSession.data.images = [{ fileId, filename }];
 
-            // Move to notes step WITH SKIP BUTTON
+            // Move to notes step (step 11)
             orderSession.step = 11;
             await ctx.reply(
                 t.notes_prompt,
