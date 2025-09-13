@@ -23,6 +23,10 @@ const orderSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    address: {
+        type: String,
+        required: true // make required if every order must have an address
+    },
     specialInstructions: {
         type: String,
         default: ''
@@ -44,7 +48,7 @@ const orderSchema = new mongoose.Schema({
         fileId: String,
         filename: String,
         caption: String
-    }],
+    }]
 });
 
 module.exports = mongoose.model('Order', orderSchema);
